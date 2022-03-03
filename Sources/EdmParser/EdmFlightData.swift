@@ -347,12 +347,12 @@ public struct EdmFlightData : Encodable {
 }
 
 extension TimeInterval {
-    func hms () -> String {
+    public func hms () -> String {
         var m = Int(self / 60.0)
         let s = Int(self) - m * 60
         let h = Int(Double(m) / 60.0)
         m = m - h * 60
         
-        return String(format: "%dh %dm %ds", h,m,s)
+        return String(format: "%2.2d:%2.2d:%2.2d", h,m,s)
     }
 }

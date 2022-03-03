@@ -29,8 +29,8 @@ public struct EdmAlarmLimits : Encodable {
             oilHi = 0
             oilLow = 0
         } else {
-            voltsHi = Int(values[0]) ?? 0
-            voltsLow = Int(values[1]) ?? 0
+            voltsHi = (Int(values[0]) ?? 0)/10
+            voltsLow = (Int(values[1]) ?? 0)/10
             diff = Int(values[2]) ?? 0
             cht  = Int(values[3]) ?? 0
             cld = Int(values[4]) ?? 0
@@ -40,6 +40,32 @@ public struct EdmAlarmLimits : Encodable {
         }
     }
     
+    enum CodingKeys : String, CodingKey {
+        case voltsHi = "Volts High"
+        case voltsLow = "Volts Low"
+        case diff = "Diff"
+        case cht = "Cylinder Head Temperature"
+        case cld = "Cold Difference"
+        case tit = "Turbine Inlet Temperature"
+        case oilHi = "Oil High"
+        case oilLow = "Oil Low"
+    }
+
+    public func toJsonString() -> String {
+        let encoder = JSONEncoder()
+        let formatter = DateFormatter()
+            
+        formatter.dateStyle = .short
+        formatter.timeStyle = .medium
+        encoder.dateEncodingStrategy = .formatted(formatter)
+        encoder.outputFormatting = .prettyPrinted
+
+        //todo
+        let data = try! encoder.encode(self)
+        let s = String(data: data, encoding: .utf8) ?? " --invalid record-- "
+        return s + "\n"
+    }
+
     public func stringValue() -> String  {
         var str = ""
         str.append("Alarm Thresholds: ")
@@ -98,6 +124,26 @@ public struct EdmFuelFlow : Encodable {
                 break
             }
         }
+    }
+    
+    enum CodingKeys : String, CodingKey {
+        case fuelFlow = "Fuel Flow Unit"
+        case ftank1 =  "Fuel Capacity Main Tanks"
+        case ftank2 = "Fuel Capacity Tips"
+    }
+    
+    public func toJsonString() -> String {
+            let encoder = JSONEncoder()
+            let formatter = DateFormatter()
+            
+            formatter.dateStyle = .short
+            formatter.timeStyle = .medium
+            encoder.dateEncodingStrategy = .formatted(formatter)
+            encoder.outputFormatting = .prettyPrinted
+
+            //todo
+            let data = try! encoder.encode(self)
+            return String(data: data, encoding: .utf8) ?? " --invalid record-- "
     }
     
     public func stringValue() -> String {
@@ -311,8 +357,9 @@ public struct EdmFileHeader : Encodable {
         str.append(ff.stringValue())
         str.append(alarms.stringValue())
         
-        str.append("Flights:\n")
+        str.append("Flights:")
         if includeFlights {
+            str.append("\n")
             for flight in flightInfos {
                 str.append(flight.stringValue())
             }
@@ -371,7 +418,7 @@ public struct EdmFlightHeader : Encodable {
         let d : Date = date ?? Date()
         str.append("flight id: " + String(id))
         //str.append(", rate: " + String(interval_secs) + " secs")
-        str.append(", " + d.toString(dateFormat: "dd.MM.YY HH:mm\n"))
+        str.append(", " + d.toString(dateFormat: "dd.MM.YY HH:mm"))
         
         return str
     }
@@ -420,6 +467,20 @@ public struct EdmFileData : Encodable {
     public var edmFlightData : [EdmFlightData]
     init () {
         edmFlightData = []
+    }
+    
+    public func getFlight(for id : Int) -> EdmFlightData? {
+        guard let h = self.edmFileHeader else {
+            trc(level: .error, string: "getFlight(\(id)): no flight header")
+            return nil
+        }
+        
+        guard let idx = h.idx(for: id) else {
+            trc(level: .error, string: "getFlight(\(id)): no such flight")
+            return nil
+        }
+        
+        return edmFlightData[idx]
     }
 }
 
