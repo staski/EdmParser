@@ -473,8 +473,8 @@ public struct EdmFileParser {
         let cs = self.data[nextread]
         nextread += 1
         
-        let flightheader = EdmFlightHeader(values: a, checksum: cs)
-        
+        var flightheader = EdmFlightHeader(values: a, checksum: cs)
+        flightheader?.alarmLimits = edmFileData.edmFileHeader?.alarms ?? EdmAlarmLimits()
         return flightheader
     }
 

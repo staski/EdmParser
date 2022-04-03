@@ -101,7 +101,7 @@ enum rpmhi_or_rcdt : Codable {
 
 
 public struct EdmFlightDataRecord : Codable {
-    var date : Date?
+    public var date : Date?
     var egt : [Int16] =  Array(repeating: 0x00f0, count: 6) //[0x00f0, 0x00f0]
     var t1 : Int16 = 0x00f0
     var t2 : Int16 = 0x00f0
@@ -142,6 +142,30 @@ public struct EdmFlightDataRecord : Codable {
     var repeatCount : Int = 0
     func info () -> String {
         return "Edm Flight-Data Body"
+    }
+    
+    public func maxEgt () -> Int {
+        return egt.reduce(0, { (res, e) in
+            Int(e) > res ? Int(e) : res
+        })
+    }
+    
+    public func maxCht () -> Int {
+        return cht.reduce(0, { (res, e) in
+            Int(e) > res ? Int(e) : res
+        })
+    }
+    
+    public func egtWarnCount (a: Int) -> Int {
+        return egt.filter({ Int($0) > a}).reduce(0, { (res, elem) in
+            return res+1
+        })
+    }
+
+    public func chtWarnCount (a: Int) -> Int {
+        return cht.filter({ Int($0) > a}).reduce(0, { (res, elem) in
+            return res+1
+        })
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -288,46 +312,277 @@ public struct EdmFlightData : Encodable {
         return Int(flightDataBody.last!.usd) - Int(flightDataBody.first!.usd)
     }
     
-    public var maxEgt : (Int, Int) {
-        
-        var maxEgt : Int = 0
-        var maxIdx : Int = 0
-        
-        if self.valid() == false {
-            return (0,0)
+    public func getFuelUsed() -> Int {
+        guard let h = flightHeader else {
+            trc(level: .error, string: "getFuelUsed(): no valid header")
+            return 0
         }
         
-        for idx in 0..<flightDataBody.count {
-            flightDataBody[idx].egt.forEach { e in
-                if Int(e) > maxEgt {
-                    maxEgt = Int(e)
-                    maxIdx = idx
-                }
+        var interval_secs = h.interval_secs
+
+        return Int(flightDataBody.reduce(0.0) { (res, el) in
+          
+            if el.mark == 2 {
+                interval_secs = 1
+            } else if el.mark == 3 {
+                interval_secs = h.interval_secs
             }
-        }
-        
-        return (maxEgt, maxIdx)
+            return res + Double(el.ff)*Double(interval_secs) / 3600.0
+        })
     }
 
-    public var maxCht : (Int, Int) {
-        
-        var maxCht : Int = 0
-        var maxIdx : Int = 0
-        
-        if self.valid() == false {
-            return (0,0)
+    public func getFuelFlowIntervals () -> [(Int, Int, FuelFlowLimits)]? {
+        guard let h = flightHeader else {
+            trc(level: .error, string: "getChtWarnIntervals(): no valid header")
+            return nil
         }
+
+        let mapped = flightDataBody.map({ $0.ff < FuelFlowLimits.idle.rawValue ? FuelFlowLimits.idle : $0.ff < FuelFlowLimits.cruise.rawValue ? FuelFlowLimits.cruise : FuelFlowLimits.climb })
+        let fr = mapped.enumerated()
+
+        //let filtered = fr.filter({ $0.1.diff[0] > h.alarmLimits.diff || $0.1.diff[1] > h.alarmLimits.diff })
         
-        for idx in 0..<flightDataBody.count {
-            flightDataBody[idx].cht.forEach { c in
-                if Int(c) > maxCht {
-                    maxCht = Int(c)
-                    maxIdx = idx
+        var values : [(Int, Int, FuelFlowLimits) ] = []
+        var val : (Int, Int, FuelFlowLimits) = (0,0,FuelFlowLimits.idle)
+        var lastVal : FuelFlowLimits? = nil
+        
+        values = fr.reduce(into: values) { res, elem in
+            if lastVal != nil && elem.1 == lastVal {
+                // todo: respect mark == 2 || mark == 3
+                val.1 += Int(h.interval_secs)
+            } else {
+                if lastVal != nil {
+                    res.append(val)
                 }
+                val.0 = elem.0
+                val.1 = Int(h.interval_secs)
+                val.2 = elem.1
             }
+            lastVal = elem.1
         }
         
-        return (maxCht, maxIdx)
+        if lastVal != nil {
+            values.append(val)
+        }
+        
+        return values
+    }
+
+    public func getMaxEgt () -> (Int,Int) {
+        let fr = flightDataBody.enumerated()
+        return fr.reduce((0,0), { (res, elem ) in
+            let m = elem.1.maxEgt()
+            return m > res.1 ? (elem.0,m) : res
+        })
+    }
+
+    public func getMaxCht () -> (Int,Int) {
+        let fr = flightDataBody.enumerated()
+        return fr.reduce((0,0), { (res, elem ) in
+            let m = elem.1.maxCht()
+            return m > res.1 ? (elem.0,m) : res
+        })
+    }
+
+    public func getMaxDiff () -> (Int,Int) {
+        let fr = flightDataBody.enumerated()
+        return fr.reduce((0,0), { (res, elem ) in
+            let m = elem.1.diff[0] > elem.1.diff[1] ? elem.1.diff[0] : elem.1.diff[1]
+            return m > res.1 ? (elem.0,m) : res
+        })
+    }
+    
+    public func getDiffWarnCount () -> [(Int,Int)]? {
+        guard let h = flightHeader else {
+            trc(level: .error, string: "getDiffWarnCount(): no valid header")
+            return nil
+        }
+        let fr = flightDataBody.enumerated()
+        
+        
+        let a = fr.filter({ $0.1.diff[0] > h.alarmLimits.diff || $0.1.diff[1] > h.alarmLimits.diff })
+        return a.map({ elem in
+            (elem.0, elem.1.chtWarnCount(a: h.alarmLimits.diff))
+        })
+    }
+
+    public func getDiffWarnIntervals () -> [(Int, Int, Int)]? {
+        guard let h = flightHeader else {
+            trc(level: .error, string: "getChtWarnIntervals(): no valid header")
+            return nil
+        }
+        let fr = flightDataBody.enumerated()
+
+        let filtered = fr.filter({ $0.1.diff[0] > h.alarmLimits.diff || $0.1.diff[1] > h.alarmLimits.diff })
+        
+        var values : [(Int, Int, Int) ] = []
+        var val : (Int, Int, Int) = (0,0,0)
+        var lastIdx = -1
+        
+        values = filtered.reduce(into: values) { res, elem in
+            if elem.0 == lastIdx + 1  && lastIdx != -1 {
+                // todo: respect mark == 2 || mark == 3
+                val.1 += Int(h.interval_secs)
+            } else {
+                if lastIdx != -1 {
+                    res.append(val)
+                }
+                val.0 = elem.0
+                val.1 = Int(h.interval_secs)
+                val.2 = Int(h.alarmLimits.cht)
+            }
+            lastIdx = elem.0
+        }
+        
+        if lastIdx != -1 {
+            values.append(val)
+        }
+        
+        return values
+    }
+    
+    public func getChtWarnCount () -> [(Int,Int)]? {
+        guard let h = flightHeader else {
+            trc(level: .error, string: "getChtWarnCount(): no valid header")
+            return nil
+        }
+        let fr = flightDataBody.enumerated()
+
+        let a = fr.filter({ $0.1.maxCht() > h.alarmLimits.cht })
+        return a.map({ elem in
+            (elem.0, elem.1.chtWarnCount(a: h.alarmLimits.cht))
+        })
+    }
+
+    public func getChtWarnIntervals () -> [(Int, Int, Int)]? {
+        guard let h = flightHeader else {
+            trc(level: .error, string: "getChtWarnIntervals(): no valid header")
+            return nil
+        }
+        let fr = flightDataBody.enumerated()
+
+        let filtered = fr.filter({ $0.1.maxCht() > h.alarmLimits.cht })
+        
+        var values : [(Int, Int, Int) ] = []
+        var val : (Int, Int, Int) = (0,0,0)
+        var lastIdx = -1
+        
+        values = filtered.reduce(into: values) { res, elem in
+            if elem.0 == lastIdx + 1  && lastIdx != -1 {
+                // todo: respect mark == 2 || mark == 3
+                val.1 += Int(h.interval_secs)
+            } else {
+                if lastIdx != -1 {
+                    res.append(val)
+                }
+                val.0 = elem.0
+                val.1 = Int(h.interval_secs)
+                val.2 = Int(h.alarmLimits.cht)
+            }
+            lastIdx = elem.0
+        }
+        
+        if lastIdx != -1 {
+            values.append(val)
+        }
+        
+        return values
+    }
+
+    public func getOilLowCount () -> [(Int,Int)]? {
+        guard let h = flightHeader else {
+            trc(level: .error, string: "getOilLowCount(): no valid header")
+            return nil
+        }
+        let fr = flightDataBody.enumerated()
+
+        let a = fr.filter({ $0.1.oil < h.alarmLimits.oilLow })
+        return a.map({ elem in
+            (elem.0, Int(elem.1.oil))
+        })
+    }
+
+    public func getOilLowIntervals () -> [(Int, Int, Int)]? {
+        guard let h = flightHeader else {
+            trc(level: .error, string: "getOilLowCount(): no valid header")
+            return nil
+        }
+        let fr = flightDataBody.enumerated()
+
+        let filtered = fr.filter({ $0.1.oil < h.alarmLimits.oilLow })
+        
+        var values : [(Int, Int, Int) ] = []
+        var val : (Int, Int, Int) = (0,0,0)
+        var lastIdx = -1
+        
+        values = filtered.reduce(into: values) { res, elem in
+            if elem.0 == lastIdx + 1  && lastIdx != -1 {
+                // todo: respect mark == 2 || mark == 3
+                val.1 += Int(h.interval_secs)
+            } else {
+                if lastIdx != -1 {
+                    res.append(val)
+                }
+                val.0 = elem.0
+                val.1 = Int(h.interval_secs)
+                val.2 = Int(h.alarmLimits.oilLow)
+            }
+            lastIdx = elem.0
+        }
+
+        if lastIdx != -1 {
+            values.append(val)
+        }
+
+        return values
+    }
+
+    public func getColdWarnCount () -> [(Int,Int)]? {
+        guard let h = flightHeader else {
+            trc(level: .error, string: "getColdWarnCount(): no valid header")
+            return nil
+        }
+        let fr = flightDataBody.enumerated()
+
+        let a = fr.filter({ $0.1.cld > h.alarmLimits.cld })
+        return a.map({ elem in
+            (elem.0, Int(elem.1.cld))
+        })
+    }
+
+    public func getColdWarnIntervals () -> [(Int, Int, Int)]? {
+        guard let h = flightHeader else {
+            trc(level: .error, string: "getColdWarnIntervals(): no valid header")
+            return nil
+        }
+        let fr = flightDataBody.enumerated()
+
+        let filtered = fr.filter({ $0.1.cld > h.alarmLimits.cld })
+        
+        var values : [(Int, Int, Int) ] = []
+        var val : (Int, Int, Int) = (0,0,0)
+        var lastIdx = -1
+        
+        values = filtered.reduce(into: values) { res, elem in
+            if elem.0 == lastIdx + 1  && lastIdx != -1 {
+                // todo: respect mark == 2 || mark == 3
+                val.1 += Int(h.interval_secs)
+            } else {
+                if lastIdx != -1 {
+                    res.append(val)
+                }
+                val.0 = elem.0
+                val.1 = Int(h.interval_secs)
+                val.2 = Int(h.alarmLimits.cld)
+            }
+            lastIdx = elem.0
+        }
+
+        if lastIdx != -1 {
+            values.append(val)
+        }
+
+        return values
     }
 
     enum CodingKeys : CodingKey {
@@ -335,15 +590,56 @@ public struct EdmFlightData : Encodable {
         case flightDataBody
     }
     
+    public func stringSummary() -> String? {
+        guard let fh = flightHeader else {
+            return nil
+        }
+        
+        var s = fh.stringValue()
+        s.append("\nduration: " + duration.hms() + ", fuel used: \(fuelUsed)")
+        return s
+    }
+
     public func stringValue() -> String? {
         guard let fh = flightHeader else {
             return nil
         }
         
         var s = fh.stringValue()
-        s.append("duration: " + duration.hms() + ", fuel used: \(fuelUsed)")
+        s.append("\nduration: " + duration.hms() + ", fuel used: \(fuelUsed)\n")
+        
+        var (idx, maxt) = self.getMaxEgt()
+        var fr = flightDataBody[idx]
+        guard let t = fr.date else {
+            trc(level: .error, string: "FlightData.stringValue(): no date set")
+            return nil
+        }
+        
+        var d = t.timeIntervalSince(fh.date!)
+        s.append("max EGT: \(maxt) F after " + d.hms() + "\n")
+
+        (idx, maxt) = self.getMaxCht()
+        fr = flightDataBody[idx]
+        guard let t = fr.date else {
+            trc(level: .error, string: "FlightData.stringValue(): no date set")
+            return nil
+        }
+        
+        d = t.timeIntervalSince(fh.date!)
+        s.append("max CHT: \(maxt) F after " + d.hms())
+        
+        (idx, maxt) = self.getMaxDiff()
+        fr = flightDataBody[idx]
+        guard let t = fr.date else {
+            trc(level: .error, string: "FlightData.stringValue(): no date set")
+            return nil
+        }
+        
+        d = t.timeIntervalSince(fh.date!)
+        s.append("\nmax DIFF: \(maxt) F after " + d.hms())
         return s
     }
+
 }
 
 extension TimeInterval {

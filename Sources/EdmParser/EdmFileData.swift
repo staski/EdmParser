@@ -12,7 +12,7 @@ public struct EdmAlarmLimits : Encodable {
     var voltsHi     : Int = 0
     var voltsLow    : Int = 0
     var diff        : Int = 0
-    var cht         : Int = 0
+    public var cht         : Int = 0
     var cld         : Int = 0
     var tit         : Int = 0
     var oilHi       : Int = 0
@@ -81,6 +81,23 @@ public struct EdmAlarmLimits : Encodable {
         str.append("\n")
         
         return str
+    }
+}
+
+public enum FuelFlowLimits : Int {
+    case idle = 35
+    case cruise = 65
+    case climb = 120
+    
+    public func stringValue() -> String {
+        switch self {
+            case .idle:
+                return "Idle/Taxi/Descend"
+            case .cruise:
+                return "Cruise"
+            case .climb:
+                return "Climb"
+        }
     }
 }
 
@@ -409,7 +426,8 @@ public struct EdmFlightHeader : Encodable {
     var flags = EdmFeatures()
     var unknown : UInt16 = 0
     var interval_secs : UInt16 = 0
-    var date : Date?
+    public var date : Date?
+    public var alarmLimits = EdmAlarmLimits()
     var checksum : UInt8 = 0
     
     public func stringValue () -> String {
