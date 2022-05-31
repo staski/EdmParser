@@ -428,6 +428,7 @@ public struct EdmFlightHeader : Encodable {
     var interval_secs : UInt16 = 0
     public var date : Date?
     public var alarmLimits = EdmAlarmLimits()
+    public var registration = ""
     var checksum : UInt8 = 0
     
     public func stringValue () -> String {

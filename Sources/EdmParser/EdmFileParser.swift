@@ -474,7 +474,11 @@ public struct EdmFileParser {
         nextread += 1
         
         var flightheader = EdmFlightHeader(values: a, checksum: cs)
+        
+        //inherit alarmLimits and registration from file header
         flightheader?.alarmLimits = edmFileData.edmFileHeader?.alarms ?? EdmAlarmLimits()
+        flightheader?.registration = edmFileData.edmFileHeader?.registration ?? ""
+        
         return flightheader
     }
 
