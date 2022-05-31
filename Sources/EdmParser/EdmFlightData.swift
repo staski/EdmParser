@@ -304,6 +304,7 @@ public struct EdmFlightData : Encodable {
         return DateInterval(start: d1, end: d2).duration
     }
     
+    // fuel used as difference between fuel used data points at start and end of flight
     public var fuelUsed : Int {
         if self.valid() == false {
             return -1
@@ -312,6 +313,7 @@ public struct EdmFlightData : Encodable {
         return Int(flightDataBody.last!.usd) - Int(flightDataBody.first!.usd)
     }
     
+    // fuel used as a sum of "integrated" fuel flow values at each data point
     public func getFuelUsed() -> Int {
         guard let h = flightHeader else {
             trc(level: .error, string: "getFuelUsed(): no valid header")
@@ -388,6 +390,14 @@ public struct EdmFlightData : Encodable {
         let fr = flightDataBody.enumerated()
         return fr.reduce((0,0), { (res, elem ) in
             let m = elem.1.diff[0] > elem.1.diff[1] ? elem.1.diff[0] : elem.1.diff[1]
+            return m > res.1 ? (elem.0,m) : res
+        })
+    }
+    
+    public func getMaxOil () -> (Int,Int) {
+        let fr = flightDataBody.enumerated()
+        return fr.reduce((0,0), { (res, elem ) in
+            let m = Int(elem.1.oil)
             return m > res.1 ? (elem.0,m) : res
         })
     }
@@ -504,7 +514,7 @@ public struct EdmFlightData : Encodable {
 
     public func getOilLowIntervals () -> [(Int, Int, Int)]? {
         guard let h = flightHeader else {
-            trc(level: .error, string: "getOilLowCount(): no valid header")
+            trc(level: .error, string: "getOilLowIntervals(): no valid header")
             return nil
         }
         let fr = flightDataBody.enumerated()
@@ -537,6 +547,54 @@ public struct EdmFlightData : Encodable {
         return values
     }
 
+    public func getOilHighCount () -> [(Int,Int)]? {
+        guard let h = flightHeader else {
+            trc(level: .error, string: "getOilHighCount(): no valid header")
+            return nil
+        }
+        let fr = flightDataBody.enumerated()
+
+        let a = fr.filter({ $0.1.oil > h.alarmLimits.oilHi })
+        return a.map({ elem in
+            (elem.0, Int(elem.1.oil))
+        })
+    }
+
+    public func getOilHighIntervals () -> [(Int, Int, Int)]? {
+        guard let h = flightHeader else {
+            trc(level: .error, string: "getOilHighIntervals(): no valid header")
+            return nil
+        }
+        let fr = flightDataBody.enumerated()
+
+        let filtered = fr.filter({ $0.1.oil > h.alarmLimits.oilHi })
+        
+        var values : [(Int, Int, Int) ] = []
+        var val : (Int, Int, Int) = (0,0,0)
+        var lastIdx = -1
+        
+        values = filtered.reduce(into: values) { res, elem in
+            if elem.0 == lastIdx + 1  && lastIdx != -1 {
+                // todo: respect mark == 2 || mark == 3
+                val.1 += Int(h.interval_secs)
+            } else {
+                if lastIdx != -1 {
+                    res.append(val)
+                }
+                val.0 = elem.0
+                val.1 = Int(h.interval_secs)
+                val.2 = Int(h.alarmLimits.oilHi)
+            }
+            lastIdx = elem.0
+        }
+
+        if lastIdx != -1 {
+            values.append(val)
+        }
+
+        return values
+    }
+    
     public func getColdWarnCount () -> [(Int,Int)]? {
         guard let h = flightHeader else {
             trc(level: .error, string: "getColdWarnCount(): no valid header")
