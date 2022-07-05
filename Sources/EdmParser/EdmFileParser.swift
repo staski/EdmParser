@@ -166,12 +166,11 @@ public struct EdmFileParser {
                     rec.naflags.setBit(i: i)
                 }
                 rdr.values[i] += (rdr.signFlags.hasBit(i: i) ? -1 : 1) * Int16(UInt16(val8))
-                
-                //trc(level: .all, string: "parseFlightDataRecord: value = \(i) val8 \(val8), values: \(rdr.values[i])")
+                    // trc(level: .all, string: "parse: idx \(i) val8 \(val8) \(rdr.values[i])")
             }
         }
         
-        // cmpute scaled egt values
+        // compute scaled egt values
         for i in 0..<rdr.scaleFlags.numberOfBytes {
             for j in 0..<8 {
                 if rdr.scaleFlags.hasBit(i: i*8+j) {
@@ -195,7 +194,7 @@ public struct EdmFileParser {
             let numOfEngines = edmFileData.edmFileHeader?.config.numOfEngines()
             if numOfEngines == 1 {
                 if rdr.signFlags.hasBit(i: 41) {
-                    rdr.values[42] -= rdr.values[42]
+                    rdr.values[42] = -rdr.values[42]
                 }
                 if rdr.values[42] != 0 {
                     rec.naflags.clearBit(i: 42)
@@ -417,6 +416,10 @@ public struct EdmFileParser {
             
             trc(level: .info, string: "parseFlightHeaderAndBody (\(id), \(reccount)): " + rec.stringValue())
             
+            efd.hasoat = efd.hasoat == true ? true : rec.hasoat
+            efd.hasiat = efd.hasiat == true ? true : rec.hasiat
+            efd.hasoat = efd.hasmap == true ? true : rec.hasmap
+
             efd.flightDataBody.append(rec)
             currentRec = rec
             currentRec.repeatCount = 0
@@ -475,9 +478,10 @@ public struct EdmFileParser {
         
         var flightheader = EdmFlightHeader(values: a, checksum: cs)
         
-        //inherit alarmLimits and registration from file header
+        //inherit alarmLimits, Fuel Flow and registration from file header
         flightheader?.alarmLimits = edmFileData.edmFileHeader?.alarms ?? EdmAlarmLimits()
         flightheader?.registration = edmFileData.edmFileHeader?.registration ?? ""
+        flightheader?.ff = edmFileData.edmFileHeader?.ff ?? EdmFuelFlow()
         
         return flightheader
     }

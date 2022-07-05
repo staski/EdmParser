@@ -129,7 +129,7 @@ public struct EdmFlightDataRecord : Codable {
     
     var map : Int16 = 0x00f0
     var rpm : Int16 = 0x00f0
-    var rpmhircdt : rpmhi_or_rcdt = rpmhi_or_rcdt.rpmhi(0x00f0)
+    var rpmhircdt : rpmhi_or_rcdt = rpmhi_or_rcdt.rpmhi(0x0000)
     var riat : Int16 = 0x00f0
     var unk_6_4 : Int16 = 0x00f0
     var unk_6_5 : Int16 = 0x00f0
@@ -140,6 +140,11 @@ public struct EdmFlightDataRecord : Codable {
     var naflags : EdmNAFlags = EdmNAFlags(rawValue: 0)
     
     var repeatCount : Int = 0
+    var hasmap = false
+    var hasoat = false
+    var hasiat = false
+    var hasrpm = false
+    
     func info () -> String {
         return "Edm Flight-Data Body"
     }
@@ -179,6 +184,19 @@ public struct EdmFlightDataRecord : Codable {
             try container.encode(cld, forKey: .cld)
             try container.encode(bat, forKey: .bat)
             try container.encode(diff[0], forKey: .diff)
+            
+            if hasrpm == true {
+                try container.encode(rpm, forKey: .rpm)
+            }
+            if hasoat == true {
+                try container.encode(oat, forKey: .oat)
+            }
+            if hasiat == true {
+                try container.encode(iat, forKey: .iat)
+            }
+            if hasmap == true {
+                try container.encode(map, forKey: .map)
+            }
     }
     
     public func minEncode(to encoder: Encoder) throws {
@@ -200,6 +218,10 @@ public struct EdmFlightDataRecord : Codable {
         case cld = "Cold Warning"
         case cht = "CHT"
         case diff = "Maximal EGT difference"
+        case iat = "Induction Air Temparature"
+        case oat = "Outside Air Temperature"
+        case map = "Manifold Pressure"
+        case rpm = "RPM"
     }
     
     public func stringValue() -> String {
@@ -258,19 +280,34 @@ public struct EdmFlightDataRecord : Codable {
         rcld  += Int16(rawValue.values[38])
         roil  += Int16(rawValue.values[39])
         map  += Int16(rawValue.values[40])
-        rpm  += Int16(rawValue.values[41])
+        rpm  += rawValue.values[41]
 
         switch rpmhircdt.self {
-            case .rpmhi(var rpmhival) : rpmhival += Int16(rawValue.values[42])
+            case .rpmhi(var rpmhival) :
+                rpmhival = Int16(rawValue.values[42])
+                rpm += (rpmhival&0xff)<<8
+                rpmhival=0
             case .rcdt(var rcdtval) : rcdtval += (rawValue.signFlags.hasBit(i: 42) ? -1 : 1) * Int16(rawValue.values[42])
         }
-
+        
         riat  += Int16(rawValue.values[43])
         unk_6_4  += Int16(rawValue.values[44])
         unk_6_5  += Int16(rawValue.values[45])
         rusd  += Int16(rawValue.values[46])
         rff  += Int16(rawValue.values[47])
 
+        if oat != 0x00f0 {
+            hasoat = true
+        }
+        if iat != 0x00f0 {
+            hasiat = true
+        }
+        if map != 0x00f0 {
+            hasmap = true
+        }
+        if rpm != 0x00f0 {
+            hasrpm = true
+        }
         repeatCount += Int(rawValue.repeatCount)
         return
     }
@@ -279,6 +316,9 @@ public struct EdmFlightDataRecord : Codable {
 public struct EdmFlightData : Encodable {
     public var flightHeader : EdmFlightHeader?
     public var flightDataBody : [EdmFlightDataRecord] = []
+    public var hasoat = false
+    public var hasiat = false
+    public var hasmap = false
     
     public func valid () -> Bool {
         if flightHeader == nil || flightDataBody.count < 1 {
@@ -658,13 +698,44 @@ public struct EdmFlightData : Encodable {
         return s
     }
 
-    public func stringValue() -> String? {
+    public func stringValue(ff_out_unit : FuelFlowUnit?) -> String? {
         guard let fh = flightHeader else {
             return nil
         }
         
+        let ff_unit = fh.ff.getUnit()
+        let ff_ounit = ff_out_unit ?? ff_unit
+
+        let factor = Double(ff_unit.factor)
+        
+        var f_unit_string = ff_unit.volumename
+        
+        var fuelused : Double = Double(getFuelUsed())/factor
+        
+        switch ff_ounit {
+        case .LPH:
+            if ff_unit == .GPH {
+                fuelused *= FuelFlowUnit.lpg
+                f_unit_string = ff_ounit.volumename
+            }
+                
+        case .GPH:
+            if ff_unit == .LPH {
+                fuelused *= FuelFlowUnit.gpl
+                f_unit_string = ff_ounit.volumename
+            }
+
+        case .KPH:
+            break
+        case .PPH:
+            break
+        }
+
+        let usedstring = String(format: "%2.2f", fuelused)
+
         var s = fh.stringValue()
-        s.append("\nduration: " + duration.hms() + ", fuel used: \(fuelUsed)\n")
+        
+        s.append("\nduration: " + duration.hms() + ", fuel used: \(usedstring) \(f_unit_string)\n")
         
         var (idx, maxt) = self.getMaxEgt()
         var fr = flightDataBody[idx]

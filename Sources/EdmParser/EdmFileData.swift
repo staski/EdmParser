@@ -107,8 +107,29 @@ public enum FuelFlowUnit : Encodable {
     case LPH // Liter per hour
     case PPH // Pound per hour
 
+    public var factor : Int {
+        get { switch self {
+                    case .GPH: return 10
+                    default: return 1
+                }
+        }
+    }
+    public static let gpl = 0.264172
+    public static let lpg = 3.78541
+    
     public var name: String {
         get { return String(describing: self) }
+    }
+    
+    public var volumename : String {
+        get {
+            switch self {
+                case .GPH: return "Gallons"
+                case .LPH:  return "Liters"
+                case .KPH: return "Kilogram"
+                case .PPH: return "Pounds"
+            }
+        }
     }
 
 }
@@ -118,6 +139,10 @@ public struct EdmFuelFlow : Encodable {
     var ftank1 : Int , ftank2 : Int
     var k1, k2          : Int
 
+    public func getUnit() -> FuelFlowUnit {
+        return fuelFlow
+    }
+    
     init (_ values: [String] = []){
         fuelFlow = .LPH
         ftank1 = 0; ftank2 = 0; k1 = 0; k2 = 0
@@ -184,8 +209,9 @@ public struct EdmFeatures : OptionSet, Encodable {
     static let tit = EdmFeatures(rawValue: (1<<21))
     static let tit2 = EdmFeatures(rawValue: (1<<22))
     static let carb = EdmFeatures(rawValue: (1<<23))
-    static let temp = EdmFeatures(rawValue: (1<<24))
-    static let rpm = EdmFeatures(rawValue: (1<<25))
+    static let iat = EdmFeatures(rawValue: (1<<24))
+    static let oat = EdmFeatures(rawValue: (1<<25))
+    static let rpm = EdmFeatures(rawValue: (1<<26))
     static let ff = EdmFeatures(rawValue: (1<<27))
     static let cld = EdmFeatures(rawValue: (1<<28))
     static let map = EdmFeatures(rawValue: (1<<30))
@@ -253,8 +279,11 @@ public struct EdmFeatures : OptionSet, Encodable {
         if self.contains(.carb) {
             str.append(", carb")
         }
-        if self.contains(.temp) {
-            str.append(", temp")
+        if self.contains(.iat) {
+            str.append(", iat")
+        }
+        if self.contains(.oat) {
+            str.append(", oat")
         }
         if self.contains(.rpm) {
             str.append(", rpm")
@@ -428,6 +457,8 @@ public struct EdmFlightHeader : Encodable {
     var interval_secs : UInt16 = 0
     public var date : Date?
     public var alarmLimits = EdmAlarmLimits()
+    public var ff = EdmFuelFlow()
+    
     public var registration = ""
     var checksum : UInt8 = 0
     
