@@ -398,38 +398,45 @@ public struct EdmFileParser {
         currentRec.date = date
         var interval_secs = TimeInterval(flightheader.interval_secs)
         
+        var repeatcount = 0
         var reccount = 0
         while nextread + 3 <= nextflightread {
             guard let rec = parseFlightDataRecord(rec: currentRec) else {
-                trc(level: .error, string: "parseFlightDataAndBody(\(id),\(reccount)): parsing flight record failed")
+                trc(level: .error, string: "parseFlightDataAndBody(\(id),\(repeatcount)): parsing flight record failed")
                 self.invalid = true
                 return
             }
             //rec.date = date
             
-            var rc = rec.repeatCount
-            reccount += rc + 1
-            while rc > 0 {
-                efd.flightDataBody.append(currentRec)
-                rc -= 1
-            }
-            
-            trc(level: .info, string: "parseFlightHeaderAndBody (\(id), \(reccount)): " + rec.stringValue())
             
             efd.hasoat = efd.hasoat == true ? true : rec.hasoat
             efd.hasiat = efd.hasiat == true ? true : rec.hasiat
             efd.hasoat = efd.hasmap == true ? true : rec.hasmap
 
+            trc(level: .info, string: "flight (\(id)) record: \(repeatcount) (\(reccount)) \(rec.date!)")
             efd.flightDataBody.append(rec)
             currentRec = rec
+            
+            var rc = rec.repeatCount
+            repeatcount += rc + 1
+            reccount += 1
+            while rc > 0 {
+                trc(level: .info, string: "repeat record \(reccount) of flight \(id) \(rc)")
+                currentRec.date = currentRec.date!.advanced(by: interval_secs)
+                efd.flightDataBody.append(currentRec)
+                rc -= 1
+            }
+            
+            trc(level: .info, string: "parseFlightHeaderAndBody (\(id), \(repeatcount)): " + rec.stringValue())
+            
             currentRec.repeatCount = 0
             if currentRec.mark == 2 {
-                trc(level: .info, string: "parseFlightHeaderAndBody(\(id),\(reccount)): mark is 2, switch timeinterval to 1 second")
+                trc(level: .info, string: "parseFlightHeaderAndBody(\(id),\(repeatcount)): mark is 2, switch timeinterval to 1 second")
                 interval_secs = 1
             }
             
             if currentRec.mark == 3 {
-                trc(level: .info, string: "parseFlightHeaderAndBody(\(id),\(reccount): mark is 3, switch back timeinterval to \(flightheader.interval_secs) second")
+                trc(level: .info, string: "parseFlightHeaderAndBody(\(id),\(repeatcount): mark is 3, switch back timeinterval to \(flightheader.interval_secs) second")
                 interval_secs = TimeInterval(flightheader.interval_secs)
             }
             currentRec.date = currentRec.date!.advanced(by: interval_secs)
@@ -483,6 +490,7 @@ public struct EdmFileParser {
         flightheader?.registration = edmFileData.edmFileHeader?.registration ?? ""
         flightheader?.ff = edmFileData.edmFileHeader?.ff ?? EdmFuelFlow()
         
+        trc(level: .all, string: "inherited ff")
         return flightheader
     }
 

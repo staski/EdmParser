@@ -354,7 +354,7 @@ public struct EdmFlightData : Encodable {
     }
     
     // fuel used as a sum of "integrated" fuel flow values at each data point
-    public func getFuelUsed() -> Int {
+    public func getFuelUsed(outFuelUnit : FuelFlowUnit?) -> Double {
         guard let h = flightHeader else {
             trc(level: .error, string: "getFuelUsed(): no valid header")
             return 0
@@ -362,7 +362,7 @@ public struct EdmFlightData : Encodable {
         
         var interval_secs = h.interval_secs
 
-        return Int(flightDataBody.reduce(0.0) { (res, el) in
+        let usd = flightDataBody.reduce(0.0) { (res, el) in
           
             if el.mark == 2 {
                 interval_secs = 1
@@ -370,16 +370,41 @@ public struct EdmFlightData : Encodable {
                 interval_secs = h.interval_secs
             }
             return res + Double(el.ff)*Double(interval_secs) / 3600.0
-        })
+        }
+        
+        let ff_unit = h.ff.getUnit()
+        let ff_ounit = outFuelUnit ?? ff_unit
+
+        let factor = Double(ff_unit.factor)
+        var fuelused = Double(usd)/factor
+        
+        switch ff_ounit {
+        case .LPH:
+            if ff_unit == .GPH {
+                fuelused *= FuelFlowUnit.lpg
+            }
+        case .GPH:
+            if ff_unit == .LPH {
+                fuelused *= FuelFlowUnit.gpl
+            }
+        case .KPH:
+            break
+        case .PPH:
+            break
+        }
+        
+        return fuelused
     }
 
     public func getFuelFlowIntervals () -> [(Int, Int, FuelFlowLimits)]? {
         guard let h = flightHeader else {
-            trc(level: .error, string: "getChtWarnIntervals(): no valid header")
+            trc(level: .error, string: "getFuelFlowIntervals(): no valid header")
             return nil
         }
 
-        let mapped = flightDataBody.map({ $0.ff < FuelFlowLimits.idle.rawValue ? FuelFlowLimits.idle : $0.ff < FuelFlowLimits.cruise.rawValue ? FuelFlowLimits.cruise : FuelFlowLimits.climb })
+        trc(level: .all, string: "getFuelFlowIntervals(): \(h.ff.ff_limits.stringValue())")
+        
+        let mapped = flightDataBody.map({ $0.ff < h.ff.ff_limits.idle ? FuelFlowLimits.idle : $0.ff < h.ff.ff_limits.cruise ? FuelFlowLimits.cruise : FuelFlowLimits.climb })
         let fr = mapped.enumerated()
 
         //let filtered = fr.filter({ $0.1.diff[0] > h.alarmLimits.diff || $0.1.diff[1] > h.alarmLimits.diff })
@@ -688,14 +713,23 @@ public struct EdmFlightData : Encodable {
         case flightDataBody
     }
     
-    public func stringSummary() -> String? {
+    public func stringSummary(ff_out_unit : FuelFlowUnit?) -> String? {
         guard let fh = flightHeader else {
             return nil
         }
         
+        let ff_ounit = ff_out_unit ?? fh.ff.getUnit()
+        let f_unit_string = ff_ounit.volumename
+        
+        let durationstring = String("duration: " + duration.hms())
+        let fuelused : Double = Double(getFuelUsed(outFuelUnit: ff_out_unit))
+        let usedstring = String(format: "fuel used: %6.1f %@", fuelused, f_unit_string)
+        let recordstring = String(format: "%3d records", flightDataBody.count)
+
         var s = fh.stringValue()
-        s.append("\nduration: " + duration.hms() + ", fuel used: \(fuelUsed)")
-        return s
+        
+        s.append(", " + durationstring + ", " + usedstring + ", " + recordstring)
+         return s
     }
 
     public func stringValue(ff_out_unit : FuelFlowUnit?) -> String? {
@@ -706,31 +740,10 @@ public struct EdmFlightData : Encodable {
         let ff_unit = fh.ff.getUnit()
         let ff_ounit = ff_out_unit ?? ff_unit
 
-        let factor = Double(ff_unit.factor)
+        let f_unit_string = ff_ounit.volumename
         
-        var f_unit_string = ff_unit.volumename
+        let fuelused : Double = Double(getFuelUsed(outFuelUnit: ff_out_unit))
         
-        var fuelused : Double = Double(getFuelUsed())/factor
-        
-        switch ff_ounit {
-        case .LPH:
-            if ff_unit == .GPH {
-                fuelused *= FuelFlowUnit.lpg
-                f_unit_string = ff_ounit.volumename
-            }
-                
-        case .GPH:
-            if ff_unit == .LPH {
-                fuelused *= FuelFlowUnit.gpl
-                f_unit_string = ff_ounit.volumename
-            }
-
-        case .KPH:
-            break
-        case .PPH:
-            break
-        }
-
         let usedstring = String(format: "%2.2f", fuelused)
 
         var s = fh.stringValue()

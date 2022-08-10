@@ -85,10 +85,10 @@ public struct EdmAlarmLimits : Encodable {
 }
 
 public enum FuelFlowLimits : Int {
-    case idle = 35
-    case cruise = 65
-    case climb = 120
-    
+    case idle
+    case cruise
+    case climb
+
     public func stringValue() -> String {
         switch self {
             case .idle:
@@ -99,8 +99,53 @@ public enum FuelFlowLimits : Int {
                 return "Climb"
         }
     }
+    
 }
 
+public struct FFLimits {
+    var idleval : Int
+    var cruiseval : Int
+    var climbval : Int
+    
+    public var idle : Int {
+        get {
+            return idleval
+        }
+    }
+    
+    public var cruise : Int {
+        get {
+            return cruiseval
+        }
+    }
+    
+    public var climb : Int {
+        get {
+            return climbval
+        }
+    }
+    
+    public func stringValue() -> String {
+        return "Idle: \(self.idle), cruise: \(self.cruise), climb: \(self.climb)"
+    }
+    
+    public init (for fuelFlowUnit : FuelFlowUnit){
+        let gplfactor : Double = FuelFlowUnit.gpl * Double(fuelFlowUnit.factor)
+        switch fuelFlowUnit {
+        case .GPH:
+            idleval = Int(29 * gplfactor)
+            cruiseval = Int(47 * gplfactor)
+            climbval = Int(120 * gplfactor)
+        default:
+            idleval = 35
+            cruiseval = 65
+            climbval = 120
+        }
+        trc(level: .all, string: "FuelFlowLimits(\(fuelFlowUnit.name)) = " + self.stringValue())
+    }
+    
+    
+}
 public enum FuelFlowUnit : Encodable {
     case GPH // Gallon per hour
     case KPH // Kilogram per hour
@@ -139,6 +184,8 @@ public struct EdmFuelFlow : Encodable {
     var ftank1 : Int , ftank2 : Int
     var k1, k2          : Int
 
+    var ff_limits : FFLimits
+    
     public func getUnit() -> FuelFlowUnit {
         return fuelFlow
     }
@@ -166,6 +213,7 @@ public struct EdmFuelFlow : Encodable {
                 break
             }
         }
+        ff_limits = FFLimits(for: fuelFlow)
     }
     
     enum CodingKeys : String, CodingKey {
@@ -348,7 +396,7 @@ public struct EdmFileHeader : Encodable {
     public var registration : String = ""
     public var date : Date?
     var alarms = EdmAlarmLimits()
-    var ff = EdmFuelFlow()
+    public var ff = EdmFuelFlow()
     var config = EdmConfig()
     public var flightInfos : [EdmFlightInfo] = []
     var headerLen = 0
