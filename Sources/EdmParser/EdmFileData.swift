@@ -354,11 +354,11 @@ public struct EdmFeatures : OptionSet, Encodable {
 
 
 public struct EdmConfig : Encodable {
-    var modelNumber : Int = 0
+    public var modelNumber : Int = 0
     var flagsLow : UInt16 = 0, flagsHi : UInt16 = 0
     var unknown : Int = 0
-    var version : Int = 0
-    var features =  EdmFeatures(rawValue: 0)
+    public var version : Int = 0
+    public var features =  EdmFeatures(rawValue: 0)
     
     init (_ values: [String] = []) {
         if values.count != 5 {
@@ -395,9 +395,9 @@ public struct EdmConfig : Encodable {
 public struct EdmFileHeader : Encodable {
     public var registration : String = ""
     public var date : Date?
-    var alarms = EdmAlarmLimits()
+    public var alarms = EdmAlarmLimits()
     public var ff = EdmFuelFlow()
-    var config = EdmConfig()
+    public var config = EdmConfig()
     public var flightInfos : [EdmFlightInfo] = []
     var headerLen = 0
     public var totalLen = 0
