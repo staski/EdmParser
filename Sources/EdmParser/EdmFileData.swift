@@ -346,12 +346,31 @@ public struct EdmFeatures : OptionSet, Encodable {
             str.append(", map")
         }
 
+        if self.contains(.cld){
+            str.append(" [temperature unit is \(EdmTemperatureUnit.fahrenheit.getString())]")
+        } else {
+            str.append(" [temperature unit is \(EdmTemperatureUnit.celsius.getString())]")
+        }
+        
         str.append("\n")
         
         return str
     }
 }
 
+public enum EdmTemperatureUnit {
+    case fahrenheit
+    case celsius
+    
+    public func getString() -> String {
+        switch self {
+        case .fahrenheit:
+                return "°F"
+        case .celsius:
+            return "°C"
+        }
+    }
+}
 
 public struct EdmConfig : Encodable {
     public var modelNumber : Int = 0
@@ -359,6 +378,12 @@ public struct EdmConfig : Encodable {
     var unknown : Int = 0
     public var version : Int = 0
     public var features =  EdmFeatures(rawValue: 0)
+
+    public var temperatureUnit : EdmTemperatureUnit {
+        get {
+            return features.contains(.cld) == true ? .fahrenheit : .celsius
+        }
+    }
     
     init (_ values: [String] = []) {
         if values.count != 5 {
@@ -387,7 +412,7 @@ public struct EdmConfig : Encodable {
         var str = ""
         str.append("Model: EDM" + String(modelNumber))
         str.append(", SW-Version: " + String(version) + "\n")
-
+        
         return str
     }
 }
