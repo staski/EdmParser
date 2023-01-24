@@ -45,7 +45,7 @@ public struct EdmAlarmLimits : Encodable {
         case voltsLow = "Volts Low"
         case diff = "Diff"
         case cht = "Cylinder Head Temperature"
-        case cld = "Cold Difference"
+        case cld = "Cooling Rate"
         case tit = "Turbine Inlet Temperature"
         case oilHi = "Oil High"
         case oilLow = "Oil Low"

@@ -215,7 +215,7 @@ public struct EdmFlightDataRecord : Codable {
         case mark = "Mark"
         case bat = "Battery Voltage"
         case egt = "EGT"
-        case cld = "Cold Warning"
+        case cld = "Cooling Rate"
         case cht = "CHT"
         case diff = "Maximal EGT difference"
         case iat = "Induction Air Temparature"
