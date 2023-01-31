@@ -182,6 +182,7 @@ public struct EdmFileParser {
                         rec.naflags.clearBit(i: idx)
                     } else {
                         rec.naflags.setBit(i: idx)
+                        trc(level: .info, string: "NA for Bit \(idx)")
                     }
                     rdr.values[idx] += (rdr.signFlags.hasBit(i: idx) ? -1 : 1) * tmp
                     //trc(level: .all, string: "parseFlightDataRecord \(idx): \(tmp) (" + String(tmp, radix: 2) + "), \(rdr.values[idx]) (" + String(rdr.values[idx], radix: 16) + ")")
@@ -212,30 +213,42 @@ public struct EdmFileParser {
             return rec
         }
         
-        for i in 0..<numOfEng {
-            var min = Int16(0x7fff)
-            var max = Int16(-1)
-            for j in 0..<numOfCyl {
-                let idx = (j<6) ? (i*24 + j):(i+24-j)
-                
-                // trc(level: .all, string: "parseFlightDataRecord i: \(i), j \(j), idx \(idx)")
-                if !rec.naflags.hasBit(i: idx) {
-                    if rdr.values[idx] > max {
-                        max = rdr.values[idx]
-                        //trc(level: .all, string: "parseFlightDataRecord: new max \(max)")
+        rec.add(rawValue: rdr)
+        
+        // egt spread for first engine
+        var min = Int16(0x7fff)
+        var max = Int16(-1)
+        for i in 0..<numOfCyl {
+            if !rec.naflags.hasBit(i: i) {
+                if rec.egt[i] > max {
+                    max = rec.egt[i]
+                }
+                if rec.egt[i] < min {
+                    min = rec.egt[i]
+                }
+            }
+        }
+        rec.diff[0] = Int(max) - Int(min)
+        trc(level: .info, string: "parseFlightDataRecord: diff for engine \(0) \(rec.diff[0])")
+
+        // egt spread for second engine
+        if numOfEng > 1 {
+            min = Int16(0x7fff)
+            max = Int16(-1)
+            for i in 0..<numOfCyl {
+                if !rec.naflags.hasBit(i: i + 24) {
+                    if rec.regt[i] > max {
+                        max = rec.regt[i]
                     }
-                    if rdr.values[idx] < min {
-                        min = rdr.values[idx]
-                        //trc(level: .all, string: "parseFlightDataRecord: new min \(min)")
+                    if rec.regt[i] < min {
+                        min = rec.regt[i]
                     }
                 }
             }
-            rec.diff[i] = Int(max) - Int(min)
-            trc(level: .all, string: "parseFlightDataRecord: diff for engine \(i) \(rec.diff[i])")
+            rec.diff[1] = Int(max) - Int(min)
+            trc(level: .info, string: "parseFlightDataRecord: diff for engine \(1) \(rec.diff[1])")
         }
-        
-        rec.add(rawValue: rdr)
-        
+
         // do the checksum stuff
         var cs : UInt8 = 0
         for i in recstart ..< nextread {

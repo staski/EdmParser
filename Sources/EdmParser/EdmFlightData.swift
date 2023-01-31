@@ -217,7 +217,7 @@ public struct EdmFlightDataRecord : Codable {
         case egt = "EGT"
         case cld = "Cooling Rate"
         case cht = "CHT"
-        case diff = "Maximal EGT difference"
+        case diff = "Maximum EGT difference"
         case iat = "Induction Air Temparature"
         case oat = "Outside Air Temperature"
         case map = "Manifold Pressure"
