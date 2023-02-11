@@ -535,6 +535,10 @@ public struct EdmFlightHeader : Encodable {
     public var registration = ""
     var checksum : UInt8 = 0
     
+    public func hasfeature(_ feature: EdmFeatures) -> Bool {
+        return flags.contains(feature)
+    }
+    
     public func stringValue () -> String {
         var str = ""
         

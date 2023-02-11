@@ -164,6 +164,7 @@ public struct EdmFileParser {
                     rec.naflags.clearBit(i: i)
                 } else {
                     rec.naflags.setBit(i: i)
+                    trc(level: .info, string: "NA for Bit \(i)")
                 }
                 rdr.values[i] += (rdr.signFlags.hasBit(i: i) ? -1 : 1) * Int16(UInt16(val8))
                     // trc(level: .all, string: "parse: idx \(i) val8 \(val8) \(rdr.values[i])")
@@ -179,10 +180,13 @@ public struct EdmFileParser {
                     tmp <<= 8
                     //let val16 : Int16 = Int16(readByte()) << 8;
                     if tmp != 0 {
+                        if rec.naflags.hasBit(i: idx){
+                            trc(level: .info, string: "clear NA for \(idx)")
+                        }
                         rec.naflags.clearBit(i: idx)
                     } else {
-                        rec.naflags.setBit(i: idx)
-                        trc(level: .info, string: "NA for Bit \(idx)")
+                        // we should not set naflags here: either low byte was 0 and the flag was set already,
+                        // or it was != zero and has to remain clear
                     }
                     rdr.values[idx] += (rdr.signFlags.hasBit(i: idx) ? -1 : 1) * tmp
                     //trc(level: .all, string: "parseFlightDataRecord \(idx): \(tmp) (" + String(tmp, radix: 2) + "), \(rdr.values[idx]) (" + String(rdr.values[idx], radix: 16) + ")")
@@ -226,8 +230,11 @@ public struct EdmFileParser {
                 if rec.egt[i] < min {
                     min = rec.egt[i]
                 }
+            } else {
+                rec.egt[i] = 0
             }
         }
+        
         rec.diff[0] = Int(max) - Int(min)
         trc(level: .info, string: "parseFlightDataRecord: diff for engine \(0) \(rec.diff[0])")
 
@@ -243,6 +250,8 @@ public struct EdmFileParser {
                     if rec.regt[i] < min {
                         min = rec.regt[i]
                     }
+                } else {
+                    rec.regt[i] = 0
                 }
             }
             rec.diff[1] = Int(max) - Int(min)
@@ -410,7 +419,13 @@ public struct EdmFileParser {
         
         currentRec.date = date
         var interval_secs = TimeInterval(flightheader.interval_secs)
-        
+        currentRec.hasoat = features.contains(.oat)
+        currentRec.hasiat = features.contains(.iat)
+        currentRec.hasmap = features.contains(.map)
+        currentRec.hasrpm = features.contains(.rpm)
+        currentRec.hasff = features.contains(.ff)
+        currentRec.hascld = features.contains(.cld)
+        currentRec.hasoil = features.contains(.oil)
         var repeatcount = 0
         var reccount = 0
         while nextread + 3 <= nextflightread {
@@ -421,11 +436,8 @@ public struct EdmFileParser {
             }
             //rec.date = date
             
+            efd.hasnaflag = efd.hasnaflag == true ? true : (rec.naflags.rawValue != 0 ? true : false)
             
-            efd.hasoat = efd.hasoat == true ? true : rec.hasoat
-            efd.hasiat = efd.hasiat == true ? true : rec.hasiat
-            efd.hasoat = efd.hasmap == true ? true : rec.hasmap
-
             trc(level: .info, string: "flight (\(id)) record: \(repeatcount) (\(reccount)) \(rec.date!)")
             efd.flightDataBody.append(rec)
             currentRec = rec
@@ -440,6 +452,9 @@ public struct EdmFileParser {
                 rc -= 1
             }
             
+            if rec.naflags.rawValue != 0 {
+                trc(level: .info, string: "NA for record(\(reccount)) is set")
+            }
             trc(level: .info, string: "parseFlightHeaderAndBody (\(id), \(repeatcount)): " + rec.stringValue())
             
             currentRec.repeatCount = 0
