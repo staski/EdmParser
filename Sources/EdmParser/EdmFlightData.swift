@@ -698,7 +698,7 @@ extension EdmFlightData {
                 }
                 val.0 = elem.0
                 val.1 = Int(h.interval_secs)
-                val.2 = Int(h.alarmLimits.cht)
+                val.2 = Int(h.alarmLimits.diff)
             }
             lastIdx = elem.0
         }
