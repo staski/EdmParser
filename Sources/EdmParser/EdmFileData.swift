@@ -252,19 +252,19 @@ public struct EdmFuelFlow : Encodable {
 public struct EdmFeatures : OptionSet, Encodable {
     public let rawValue: UInt32
     
-    static let battery = EdmFeatures(rawValue: (1<<0))
-    static let oil = EdmFeatures(rawValue: (1<<20))
-    static let tit = EdmFeatures(rawValue: (1<<21))
-    static let tit2 = EdmFeatures(rawValue: (1<<22))
-    static let carb = EdmFeatures(rawValue: (1<<23))
-    static let iat = EdmFeatures(rawValue: (1<<24))
-    static let oat = EdmFeatures(rawValue: (1<<25))
-    static let rpm = EdmFeatures(rawValue: (1<<26))
-    static let ff = EdmFeatures(rawValue: (1<<27))
-    static let cld = EdmFeatures(rawValue: (1<<28))
-    static let map = EdmFeatures(rawValue: (1<<30))
+    public static let battery = EdmFeatures(rawValue: (1<<0))
+    public static let oil = EdmFeatures(rawValue: (1<<20))
+    public static let tit = EdmFeatures(rawValue: (1<<21))
+    public static let tit2 = EdmFeatures(rawValue: (1<<22))
+    public static let carb = EdmFeatures(rawValue: (1<<23))
+    public static let iat = EdmFeatures(rawValue: (1<<24))
+    public static let oat = EdmFeatures(rawValue: (1<<25))
+    public static let rpm = EdmFeatures(rawValue: (1<<26))
+    public static let ff = EdmFeatures(rawValue: (1<<27))
+    public static let cld = EdmFeatures(rawValue: (1<<28))
+    public static let map = EdmFeatures(rawValue: (1<<30))
 
-    static let c = [
+    public static let c = [
         EdmFeatures(rawValue: (1<<2)),
         EdmFeatures(rawValue: (1<<3)),
         EdmFeatures(rawValue: (1<<4)),
@@ -276,7 +276,7 @@ public struct EdmFeatures : OptionSet, Encodable {
         EdmFeatures(rawValue: (1<<10)),
     ]
     
-    static let e = [
+    public static let e = [
         EdmFeatures(rawValue: (1<<11)),
         EdmFeatures(rawValue: (1<<12)),
         EdmFeatures(rawValue: (1<<13)),
