@@ -9,14 +9,14 @@ import Foundation
 import SwiftUI
 
 public struct EdmAlarmLimits : Encodable {
-    var voltsHi     : Int = 0
-    var voltsLow    : Int = 0
-    var diff        : Int = 0
+    public var voltsHi     : Int = 0
+    public var voltsLow    : Int = 0
+    public var diff        : Int = 0
     public var cht         : Int = 0
-    var cld         : Int = 0
-    var tit         : Int = 0
-    var oilHi       : Int = 0
-    var oilLow      : Int = 0
+    public var cld         : Int = 0
+    public var tit         : Int = 0
+    public var oilHi       : Int = 0
+    public var oilLow      : Int = 0
     
     init (_ values: [String] = []){
         if values.count != 8 {
@@ -29,8 +29,8 @@ public struct EdmAlarmLimits : Encodable {
             oilHi = 0
             oilLow = 0
         } else {
-            voltsHi = (Int(values[0]) ?? 0)/10
-            voltsLow = (Int(values[1]) ?? 0)/10
+            voltsHi = Int(values[0]) ?? 0
+            voltsLow = Int(values[1]) ?? 0
             diff = Int(values[2]) ?? 0
             cht  = Int(values[3]) ?? 0
             cld = Int(values[4]) ?? 0
@@ -68,9 +68,11 @@ public struct EdmAlarmLimits : Encodable {
 
     public func stringValue() -> String  {
         var str = ""
+        let vHi : Double = Double(voltsHi / 10)
+        let vLo : Double = Double(voltsLow / 10)
         str.append("Alarm Thresholds: ")
-        str.append("Volts Hi: " + String(voltsHi))
-        str.append(", Volts Low: " + String(voltsLow))
+        str.append("Volts Hi: " + String(vHi))
+        str.append(", Volts Low: " + String(vLo))
         str.append(", Diff: " + String(diff))
         str.append(", CHT: " + String(cht))
         str.append(", CLD: " + String(cld))
