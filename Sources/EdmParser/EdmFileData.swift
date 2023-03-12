@@ -8,7 +8,7 @@
 import Foundation
 import SwiftUI
 
-enum EdmParamDimensionEnum {
+public enum EdmParamDimensionEnum {
     case VOLUME // volume (liters)
     case TEMP // temperature (°C)
     case FLOW // flow (gallons / h)
@@ -17,7 +17,7 @@ enum EdmParamDimensionEnum {
     case FREQ // frequency (rpm)
 }
 
-enum EdmParamUnitEnum {
+public enum EdmParamUnitEnum {
     case liters
     case gallons
     case lbs
@@ -100,7 +100,7 @@ enum EdmParamUnitEnum {
     }
 }
 
-struct EdmUnits {
+public struct EdmUnits {
     var volume_unit : EdmParamUnitEnum = .liters
     var temp_unit : EdmParamUnitEnum = .fahrenheit
     var flow_unit : EdmParamUnitEnum = .lph
