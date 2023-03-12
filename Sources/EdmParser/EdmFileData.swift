@@ -101,12 +101,12 @@ public enum EdmParamUnitEnum {
 }
 
 public struct EdmUnits {
-    var volume_unit : EdmParamUnitEnum = .liters
-    var temp_unit : EdmParamUnitEnum = .fahrenheit
-    var flow_unit : EdmParamUnitEnum = .lph
-    var press_unit : EdmParamUnitEnum = .inhg
-    var volt_unit : EdmParamUnitEnum = .volt
-    var freq_unit : EdmParamUnitEnum = .rpm
+    public var volume_unit : EdmParamUnitEnum = .liters
+    public var temp_unit : EdmParamUnitEnum = .fahrenheit
+    public var flow_unit : EdmParamUnitEnum = .lph
+    public var press_unit : EdmParamUnitEnum = .inhg
+    public var volt_unit : EdmParamUnitEnum = .volt
+    public var freq_unit : EdmParamUnitEnum = .rpm
 }
 
 public struct EdmAlarmLimits : Encodable {
