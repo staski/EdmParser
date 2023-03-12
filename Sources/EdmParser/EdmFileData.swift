@@ -8,6 +8,107 @@
 import Foundation
 import SwiftUI
 
+enum EdmParamDimensionEnum {
+    case VOLUME // volume (liters)
+    case TEMP // temperature (°C)
+    case FLOW // flow (gallons / h)
+    case PRESS // pressure (inHg)
+    case VOLT // voltage (volts)
+    case FREQ // frequency (rpm)
+}
+
+enum EdmParamUnitEnum {
+    case liters
+    case gallons
+    case lbs
+    case kg
+    case celsius
+    case fahrenheit
+    case lph
+    case gph
+    case lbsph
+    case kgph
+    case inhg
+    case volt
+    case rpm
+    
+    public var shortname : String {
+        get {
+            switch self {
+            case .liters:
+                return "l"
+            case .gallons:
+                return "G"
+            case .lbs:
+                return "LBS"
+            case .kg:
+                return "KG"
+            case .celsius:
+                return "°C"
+            case .fahrenheit:
+                return "°F"
+            case .lph:
+                return "l/h"
+            case .gph:
+                return "g/h"
+            case .lbsph:
+                return "lbs/h"
+            case .kgph:
+                return "kg/h"
+            case .inhg:
+                return "\"Hg"
+            case .volt:
+                return "V"
+            case .rpm:
+                return "RPM"
+            }
+        }
+    }
+    
+    public var name: String {
+        get { return String(describing: self) }
+    }
+    
+    public var scale : Int {
+        get {
+            switch self {
+            case .gallons, .gph, .volt, .inhg:
+                return 10
+            default:
+                return 1
+            }
+        }
+    }
+    
+    public var dimension : EdmParamDimensionEnum {
+        get {
+            switch self {
+            case .gallons, .liters,.kg, .lbs:
+                return .VOLUME
+            case .volt:
+                return .VOLT
+            case .inhg:
+                return .PRESS
+            case .gph, .lph, .kgph, .lbsph:
+                return .FLOW
+            case .rpm:
+                return .FREQ
+            case .fahrenheit, .celsius:
+                return .TEMP
+            }
+        }
+    }
+}
+
+struct EdmUnits {
+    var volume_unit : EdmParamUnitEnum = .liters
+    var temp_unit : EdmParamUnitEnum = .fahrenheit
+    var flow_unit : EdmParamUnitEnum = .lph
+    var press_unit : EdmParamUnitEnum = .inhg
+    var volt_unit : EdmParamUnitEnum = .volt
+    var freq_unit : EdmParamUnitEnum = .rpm
+}
+
 public struct EdmAlarmLimits : Encodable {
     public var voltsHi     : Int = 0
     public var voltsLow    : Int = 0
