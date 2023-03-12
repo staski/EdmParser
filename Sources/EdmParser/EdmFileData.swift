@@ -380,6 +380,8 @@ public struct EdmConfig : Encodable {
     var unknown : Int = 0
     public var version : Int = 0
     public var features =  EdmFeatures(rawValue: 0)
+    public var betaNumber : Int? = nil
+    public var buildNumber : Int? = nil
 
     public var temperatureUnit : EdmTemperatureUnit {
         get {
@@ -388,7 +390,11 @@ public struct EdmConfig : Encodable {
     }
     
     init (_ values: [String] = []) {
-        if values.count != 5 {
+        var c = values.count
+        if c < 5  {
+            if c > 0 {
+                trc(level: .error, string: "EdmConfig(): too few fields in config header (\(c))")
+            }
             return
         }
         
@@ -396,8 +402,15 @@ public struct EdmConfig : Encodable {
         flagsLow = UInt16(values[1]) ?? 0
         flagsHi = UInt16(values[2]) ?? 0
         unknown = Int(values[3]) ?? -1
-        version = Int(values[4]) ?? -1
+        if c > 6 {
+            betaNumber = Int(values[c-1]); c -= 1
+            buildNumber = Int(values[c-1]);c -= 1
+        }
+        
+        version = Int(values[c-1]) ?? -1
         features = EdmFeatures(high: flagsHi, low: flagsLow)
+        
+        trc(level: .info, string: "EdmConfig(): model - \(modelNumber) version - \(version), build - \(String(describing: buildNumber)) beta - \(String(describing: betaNumber)), features: \(features.stringValue()), (count=\(values.count))")
     }
     
     public func numOfEngines () -> Int {
@@ -410,6 +423,7 @@ public struct EdmConfig : Encodable {
     func hasRPM () -> Bool {
         return false
     }
+    
     public func stringValue () -> String {
         var str = ""
         str.append("Model: EDM" + String(modelNumber))
@@ -426,8 +440,51 @@ public struct EdmFileHeader : Encodable {
     public var ff = EdmFuelFlow()
     public var config = EdmConfig()
     public var flightInfos : [EdmFlightInfo] = []
+    var protocolHeader : Int? = nil
     var headerLen = 0
     public var totalLen = 0
+    
+    public var hasProtocolHeader : Bool {
+        get {
+            return protocolHeader == nil ? false : true
+        }
+    }
+    
+    public var extraConfig : Bool {
+        get {
+            return hasProtocolHeader || config.modelNumber >= 900
+        }
+    }
+    
+    public var decodeMaskSingleByte : Bool {
+        get {
+            return !extraConfig
+        }
+    }
+    
+    public var flightHeaderSize : Int {
+        get {
+            return 15 + (extraConfig ? ((config.buildNumber ?? 0) >= 108 ? 6 : 4) : 0)
+        }
+    }
+    
+    public var protocolVersion : EdmProtovolVersion {
+        if config.modelNumber == 760 {
+            return .v2
+        }
+        if config.modelNumber == 960 {
+            return .v5
+        }
+        if config.modelNumber >= 900 {
+            if config.buildNumber != nil && config.buildNumber! >= 108 {
+                return .v4
+            } else {
+                return .v3
+            }
+        } else {
+            return hasProtocolHeader ? .v4 : .v1
+        }
+    }
     
     func idx(for flightid: Int) -> Int? {
         for (i, info) in flightInfos.enumerated() {
@@ -546,27 +603,27 @@ public struct EdmFlightHeader : Encodable {
         
         let d : Date = date ?? Date()
         str.append("flight id: " + String(id))
-        //str.append(", rate: " + String(interval_secs) + " secs")
         str.append(", " + d.toString(dateFormat: "dd.MM.YY HH:mm"))
         
         return str
     }
     
     init? (values a : [UInt16], checksum : UInt8){
-       
-    
+        
         if a.count < 7 {
             return nil
         }
-        
+
+        let i = a.count - 7
         id = a[0]
         flags = EdmFeatures(high: a[2], low: a[1])
-        unknown = a[3]
-        interval_secs = a[4]
+    
+        unknown = a[3+i]
+        interval_secs = a[4+i]
         
         
-        let dt = a[5]
-        let tm = a[6]
+        let dt = a[5+i]
+        let tm = a[6+i]
         
         let day = Int(dt & 0x001F)
         let month = Int((dt & 0x01E0) >> 5)
@@ -583,8 +640,10 @@ public struct EdmFlightHeader : Encodable {
         var cs = a.map { $0.bytesumval() }.reduce(0,+) & 0xff
         cs = (256 - cs) & 0xff
         
+        trc(level: .info, string: "EdmFlightHeader(\(id)): checksum is \(cs)")
+        
         if cs != checksum {
-            print(String(format: "EdmFlightHeader (id %d): failed for checksum (required 0x%X , data 0x%X", id, checksum, cs))
+            print(String(format: "EdmFlightHeader (id %d): failed for checksum (required 0x%X , data 0x%X)", id, checksum, cs))
             return nil
         }
         self.checksum = checksum

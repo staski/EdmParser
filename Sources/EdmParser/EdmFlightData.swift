@@ -7,29 +7,6 @@
 
 import Foundation
 
-struct BitArray16 : OptionSet {
-    let rawValue: Int16
-    let numberOfBits = 16
-    var numberOfBytes : Int {
-        return numberOfBits / 8
-    }
-    
-    init(rawValue: Int16) {
-            self.rawValue = rawValue
-    }
-    
-    func hasBit(i : Int) -> Bool {
-        if i < 0 || i > 15 {
-            return false
-        }
-        if self.contains(BitArray16(rawValue: 1 << i)) {
-            return true
-        } else {
-            return false
-        }
-    }
-}
-
 struct BitArray48: OptionSet, Codable {
     var rawValue: Int64
     let numberOfBits = 48
@@ -66,6 +43,92 @@ struct BitArray48: OptionSet, Codable {
         self.rawValue &= ~Int64(1 << i)
     }
 
+}
+
+struct BitArray64 : OptionSet {
+    var rawValue: UInt64
+}
+
+struct BitArray {
+    var rawValueLow : BitArray64
+    var rawValueHi : BitArray64
+    var numberOfBits : Int
+    var numberOfBytes : Int{
+        return numberOfBits / 8
+    }
+    
+    init (size: Int) {
+        rawValueHi = BitArray64()
+        rawValueLow = BitArray64()
+        numberOfBits = size
+    }
+    
+    init(low: UInt64, high: UInt64, size: Int) {
+        self.rawValueLow = BitArray64(rawValue: low)
+        self.rawValueHi = BitArray64(rawValue: high)
+        self.numberOfBits = size
+    }
+
+    func hasBit(i : Int) -> Bool {
+        if i < 0 || i >= numberOfBits {
+            return false
+        }
+        
+        //trc(level: .info, string: String(rawValueLow.rawValue, radix: 2) + ".hasBit(\(i))")
+        if i < 64 && rawValueLow.contains(BitArray64(rawValue: 1 << i)) {
+            return true
+        } else if i >= 64 && rawValueHi.contains(BitArray64(rawValue: 1 << (i-64))){
+            return true
+        }
+        //trc(level: .info, string: "----NO-----")
+        return false
+    }
+    
+    mutating func setBit(i : Int) {
+        if i < 0 || i >= numberOfBits {
+            return
+        }
+        
+        trc(level: .info, string: String(rawValueLow.rawValue, radix: 2) + ".setBit(\(i))")
+        if i < 64 {
+            rawValueLow.rawValue |= UInt64(1<<i)
+        } else {
+            rawValueHi.rawValue |= UInt64(1<<(i-64))
+        }
+        trc(level: .info, string: "result is" + String(rawValueLow.rawValue, radix: 2))
+
+    }
+
+    mutating func clearBit(i : Int) {
+        if i < 0 || i >= numberOfBits {
+            return
+        }
+
+        trc(level: .info, string: String(rawValueLow.rawValue, radix: 2) + ".clearBit(\(i))")
+        if i < 64 {
+            rawValueLow.rawValue &= ~UInt64(1<<i)
+        } else {
+            rawValueHi.rawValue &= ~UInt64(1<<(i-64))
+        }
+        trc(level: .info, string: "result is " + String(rawValueLow.rawValue, radix: 2))
+
+    }
+
+    mutating func setByte(_ i: Int, value: UInt8) {
+        if i < 0 || i >= numberOfBytes {
+            return
+        }
+        let m = UInt64(0xff)
+        let v = UInt64(value)
+        let idx = i < 8 ? i : i - 8
+        if i < 8 {
+            rawValueLow.rawValue &= ~(m<<(idx*8))
+            rawValueLow.rawValue |= v<<(idx*8)
+        } else {
+            rawValueHi.rawValue &= ~(m << (idx*8))
+            rawValueHi.rawValue |= v << (idx*8)
+        }
+    }
 }
 
 typealias EdmNAFlags = BitArray48
@@ -143,22 +206,35 @@ extension EdmNAFlags {
     }
 }
 
-typealias EdmValueFlags = BitArray48
-typealias EdmSignFlags = BitArray48
+typealias EdmDecodeFlags = BitArray
+typealias EdmValueFlags = BitArray
+typealias EdmSignFlags = BitArray
 
-typealias EdmDecodeFlags = BitArray16
-typealias EdmScaleFlags = BitArray16
+typealias EdmScaleFlags = BitArray
 
 struct EdmRawDataRecord {
     var decodeFlags : EdmDecodeFlags?
     var repeatCount : Int8 = 0
-    var valueFlags = EdmValueFlags()
-    var scaleFlags = EdmScaleFlags()
-    var signFlags = EdmSignFlags()
+    var valueFlags : EdmValueFlags
+    var signFlags : EdmSignFlags
     
-    var values : [Int16] = Array(repeating: 0, count: 48)
-    var signValues : [Int] = Array(repeating: 1, count: 48)
-    var scaleValues : [Int16] = Array(repeating: 0, count: 16)
+    var values : [Int16]
+    var signValues : [Int]
+    
+    init (protocolVersion: EdmProtovolVersion) {
+        switch protocolVersion {
+        case .v1, .v2:
+            valueFlags = EdmValueFlags(size: 64)
+            signFlags = EdmSignFlags(size: 64)
+            values = Array(repeating: 0, count: 64)
+            signValues = Array(repeating: 1, count: 64)
+        default:
+            valueFlags = EdmValueFlags(size: 128)
+            signFlags = EdmSignFlags(size: 128)
+            values = Array(repeating: 0, count: 128)
+            signValues = Array(repeating: 1, count: 128)
+        }
+    }
     
     var checksum : UInt8 = 0
 }
@@ -483,6 +559,7 @@ public struct EdmFlightData : Encodable {
         let fr = flightDataBody.enumerated()
         return fr.reduce((0,0), { (res, elem ) in
             let m = elem.1.maxEgt()
+            trc(level: .info, string: "getMaxEgt(\(res) \(m)")
             return m > res.1 ? (elem.0,m) : res
         })
     }

@@ -7,6 +7,61 @@
 
 import Foundation
 
+public func isHighByteBit(_ i: Int) -> Bool {
+    return (i>=48 && i<64) || (i == 42 ? true : false)
+}
+
+public func getLowByteBit(_ i: Int) -> Int {
+    if i>=48 && i < 56 {
+        return i - 48
+    }
+    if i >= 56 && i < 64 {
+        return i - 32
+    }
+    if i == 42 {
+        return 41
+    }
+    return i
+}
+
+public enum EdmProtovolVersion {
+    case v1 // model number < 900, != 760, no protocol header
+    case v2 // model 760
+    case v3 // model >= 900 but firmware version < 108
+    case v4 // model >= 900, firmware version >= 108 || has a protocol header
+    case v5 // model 960
+    
+    static let highByteBits1 = UInt64(0xff)<<5*8 | UInt64(0xff)<<6*8 | UInt64(1)<<42
+
+    public var flightHeaderSize : Int {
+        switch self {
+        case .v1: return 15
+        case .v2: return 15
+        case .v3: return 19
+        case .v4: return 21
+        case .v5: return 19
+        }
+    }
+    
+    public var decodeFlagsSize : Int {
+        switch self {
+        case .v1, .v2:
+            return 16
+        default:
+            return 32
+        }
+    }
+    
+    public var valueFlagsSize : Int {
+        switch self {
+        case .v1, .v2:
+            return 64
+        default:
+            return 128
+        }
+    }
+}
+
 public struct EdmFileParser {
     public var data : Data = Data()
     public var edmFileData : EdmFileData = EdmFileData()
@@ -15,6 +70,7 @@ public struct EdmFileParser {
     var headerChecksum : UInt8 = 0
     public var complete = false
     public var invalid = false
+    public var proto : EdmProtovolVersion = .v1
 
     var flightRecords : [EdmFlightDataRecord] = []
     
@@ -71,6 +127,9 @@ public struct EdmFileParser {
             c = readChar()
 
             if (c == ","){
+                if newItem != nil {
+                    trc(level: .info, string: "new Item: " + newItem!)
+                }
                 return newItem
             }
             if (c == "*"){
@@ -103,97 +162,78 @@ public struct EdmFileParser {
     }
     
     mutating func parseFlightDataRecord(rec original: EdmFlightDataRecord) ->EdmFlightDataRecord? {
-        var rdr = EdmRawDataRecord()
+        var rdr = EdmRawDataRecord(protocolVersion: proto)
         var rec = original
         let recstart = nextread // keep this for later checksum calculation
+        var tmpString = ""
         
         // read the decode flagw
         guard let df = parseFlightDecodeFlags() else {
             return rec
         }
         rdr.decodeFlags = df
-        trc(level: .all, string: "parseFlightDataRecord: decode flags = " + String(df.rawValue, radix: 2))
+        trc(level: .all, string: "parseFlightDataRecord: decode flags = " + String(df.rawValueLow.rawValue, radix: 2))
         
         rdr.repeatCount = Int8(readByte())
         trc(level: .all, string: "parseFlightDataRecord: repeat count = \(rdr.repeatCount)")
         
         // read the compressed value flags
         // TODO assert rdr.valueFlags.numberOfBytes <= rdr.decodeFlags.numberofBits
-        var value64 : Int64 = 0
         for i in 0..<rdr.valueFlags.numberOfBytes {
             if rdr.decodeFlags!.hasBit(i: i) {
-                var tmp = Int64(readByte())
-                //trc(level: .all, string: "parseFlightDataRecord: f_value = \(i): \(tmp) " + String(tmp, radix: 2) + ", " + String(tmp, radix: 16))
-                tmp <<= i*8
-                value64 += tmp
+                let tmp = UInt8(readByte())
+                rdr.valueFlags.setByte(i, value: tmp)
+                tmpString.append("[" + String(i) + " " + String(tmp) + "]")
+                //trc(level: .error, string: "parseFlightDataRecord: f_value = \(i): \(tmp) sum = \(rdr.valueFlags.rawValueLow.rawValue), values " + String(tmp, radix: 2) + ", " + String(tmp, radix: 16))
             }
         }
-        rdr.valueFlags = EdmValueFlags(rawValue: value64)
-        trc(level: .all, string: "parseFlightDataRecord: valueFlags = \(value64), Binary: " + String(value64, radix: 16))
-               
-        // read the compressed scale flags
-        var value16 : Int16 = 0
-        for i in 0..<rdr.scaleFlags.numberOfBytes {
-            if rdr.decodeFlags!.hasBit(i: i + rdr.valueFlags.numberOfBytes) {
-                var tmp = Int16(readByte())
-                //trc(level: .all, string: "parseFlightDataRecord: f_scale = \(i): \(tmp) " + String(tmp, radix: 2) + ", " + String(tmp, radix: 16))
-                tmp <<= i*8
-                value16 += tmp
-            }
-        }
-        rdr.scaleFlags = EdmScaleFlags(rawValue: value16)
-
+        trc(level: .info, string: "parseFlightDataRecord: valueFlags " + tmpString )
+        tmpString = ""
+        
         // read the compressed signflags
         // TODO assert rdr.signFlags.numberOfBytes <= rdr.decodeFlags.numberofBits
-        value64 = 0
         for i in 0..<rdr.signFlags.numberOfBytes {
-            if rdr.decodeFlags!.hasBit(i: i) {
-                var tmp = Int64(readByte())
+            if i != 6 && i != 7 && rdr.decodeFlags!.hasBit(i: i) { // bits 6 & 7 don't have a sign bit
+                let tmp = readByte()
                 //trc(level: .all, string: "parseFlightDataRecord: f_sign = \(i): \(tmp) " + String(tmp, radix: 2) + ", " + String(tmp, radix: 16))
-                tmp <<= i*8
-                value64 += tmp
+                rdr.signFlags.setByte(i, value: tmp)
+                tmpString.append("[" + String(i) + " " + String(tmp) + "]")
             }
         }
-        rdr.signFlags = EdmSignFlags(rawValue: value64)
-        
+        trc(level: .info, string: "parseFlightDataRecord: signFlags " + tmpString )
+        tmpString = ""
+
         // read compressed values and compute naflags
         for i in 0..<rdr.valueFlags.numberOfBits {
             if rdr.valueFlags.hasBit(i: i){
-                let val8 = readByte();
-                if val8 != 0 {
-                    rec.naflags.clearBit(i: i)
-                } else {
-                    rec.naflags.setBit(i: i)
-                    trc(level: .info, string: "NA for Bit \(i)")
-                }
-                rdr.values[i] += (rdr.signFlags.hasBit(i: i) ? -1 : 1) * Int16(UInt16(val8))
-                    // trc(level: .all, string: "parse: idx \(i) val8 \(val8) \(rdr.values[i])")
-            }
-        }
-        
-        // compute scaled egt values
-        for i in 0..<rdr.scaleFlags.numberOfBytes {
-            for j in 0..<8 {
-                if rdr.scaleFlags.hasBit(i: i*8+j) {
-                    let idx = j+i*24 //24 is the index of the second engine's egt values
-                    var tmp = Int16(readByte())
-                    tmp <<= 8
-                    //let val16 : Int16 = Int16(readByte()) << 8;
-                    if tmp != 0 {
-                        if rec.naflags.hasBit(i: idx){
-                            trc(level: .info, string: "clear NA for \(idx)")
-                        }
-                        rec.naflags.clearBit(i: idx)
-                    } else {
-                        // we should not set naflags here: either low byte was 0 and the flag was set already,
-                        // or it was != zero and has to remain clear
+                let tmp = UInt8(readByte())
+                //trc(level: .info, string: "read value \(i) = \(tmp)" + (isHighByteBit(i) ? " high byte" : " low byte"))
+                if tmp != 0 { // stored value != zero => store in data record
+                    if rec.naflags.hasBit(i: i){
+                        trc(level: .info, string: "clear NA for \(i)")
+                        rec.naflags.clearBit(i: i)
                     }
-                    rdr.values[idx] += (rdr.signFlags.hasBit(i: idx) ? -1 : 1) * tmp
-                    //trc(level: .all, string: "parseFlightDataRecord \(idx): \(tmp) (" + String(tmp, radix: 2) + "), \(rdr.values[idx]) (" + String(rdr.values[idx], radix: 16) + ")")
+                    if isHighByteBit(i){
+                        let j = getLowByteBit(i)
+                        //trc(level: .error, string: "(\(j!),\(i)) -> (\(rdr.values[j!]), \(tmp) -> ")
+                        rdr.values[j] += (rdr.signFlags.hasBit(i: j) ? -1 : 1) * (Int16(tmp)<<8)
+                        //trc(level: .error, string: "(\(j!),\(i)) -> \(rdr.values[j!])")
+
+                    } else {
+                        rdr.values[i] += (rdr.signFlags.hasBit(i: i) ? -1 : 1) * Int16(UInt16(tmp))
+                    }
+                } else { // if stored value is zero, set NA for the low byte. High byte == 0 will leave this unchanged
+                    if !isHighByteBit(i){
+                        rec.naflags.setBit(i: i)
+                        trc(level: .info, string: "NA for Bit \(i)")
+                    }
                 }
+                tmpString.append("[" + String(i) + " " + String(tmp) + "]")
+                // trc(level: .all, string: "parse: idx \(i) val8 \(val8) \(rdr.values[i])")
             }
         }
-        
+        trc(level: .info, string: "parseFlightDataRecord: values " + tmpString )
+        tmpString = ""
         // special case for the rpm value (byte 41 and hi value only present for single engine)
         if edmFileData.edmFileHeader != nil{
             let numOfEngines = edmFileData.edmFileHeader?.config.numOfEngines()
@@ -257,7 +297,9 @@ public struct EdmFileParser {
             rec.diff[1] = Int(max) - Int(min)
             trc(level: .info, string: "parseFlightDataRecord: diff for engine \(1) \(rec.diff[1])")
         }
-
+        
+        let count = nextread - recstart
+        trc(level: .info, string: "parseFlightDataRecord: parsed \(count+1) Bytes")
         // do the checksum stuff
         var cs : UInt8 = 0
         for i in recstart ..< nextread {
@@ -279,15 +321,24 @@ public struct EdmFileParser {
             return nil
         }
         
-        let rv = Int16(data[nextread]) << 8 + Int16(data[nextread+1])
-        let edmDecodeFlags = EdmDecodeFlags(rawValue: rv)
-        nextread += 2
-        return edmDecodeFlags
+        if edmFileData.edmFileHeader!.decodeMaskSingleByte {
+            let rv = UInt64(data[nextread]) << 8 + UInt64(data[nextread+1])
+            nextread += 2
+            let edmDecodeFlags = EdmDecodeFlags(low: rv, high: 0, size: 16)
+            return edmDecodeFlags
+        } else {
+            let rv = UInt64(data[nextread]) << 24 + UInt64(data[nextread+1]) << 16 +
+                UInt64(data[nextread+2]) << 8 + UInt64(data[nextread+3])
+            nextread += 4
+            let edmDecodeFlags = EdmDecodeFlags(low: rv, high: 0, size: 32)
+            return edmDecodeFlags
+
+        }
     }
     
     mutating func parseHeaderLine () -> EdmHeaderLine {
         var hl : EdmHeaderLine = EdmHeaderLine()
-        var linetypechar : Character = Character("I")
+        var linetypechar : Character = Character("Z")
         eor = false
         headerChecksum = 0
         
@@ -338,6 +389,12 @@ public struct EdmFileParser {
                 hl.lineType = .lineTypeTimestamp
             case "C":
                 hl.lineType = .lineTypeConfig
+            case "P":
+                hl.lineType = .lineTypeProto
+            case "H":
+                hl.lineType = .lineTypeFvl
+            case "I":
+                hl.lineType = .lineTypeCrb
             case "D":
                 hl.lineType = .lineTypeFlight
             case "L":
@@ -349,7 +406,7 @@ public struct EdmFileParser {
         if hl.lineType == .lineTypeInvalid {
             trc(level: .error, string: "parseHeaderLine: invalid line type: \(linetypechar)")
         }
-        trc(level: .info, string: "parseHeaderLine: return new line, type: " + String(linetypechar))
+        trc(level: .info, string: "parseHeaderLine: new line type: " + String(linetypechar))
         return hl
     }
     
@@ -358,12 +415,12 @@ public struct EdmFileParser {
         guard let flightheader = parseFlightHeader(for: id) else {
             return nil
         }
-        
+
         guard let idx = edmFileData.edmFileHeader!.idx(for: id) else {
             return nil
         }
         
-        let size = edmFileData.edmFileHeader!.flightInfos[idx].sizeBytes - 15
+        let size = edmFileData.edmFileHeader!.flightInfos[idx].sizeBytes - edmFileData.edmFileHeader!.flightHeaderSize
         nextread += size
 
         return flightheader
@@ -372,6 +429,7 @@ public struct EdmFileParser {
     public mutating func parseFlightHeaderAndBody (for id: Int) {
         var currentRec = EdmFlightDataRecord()
 
+        trc(level: .info, string: "parseFlightHeaderAndBody: read position before header \(nextread)")
         guard let flightheader = parseFlightHeader(for: id) else {
             self.invalid = true
             return
@@ -399,7 +457,7 @@ public struct EdmFileParser {
             return
         }
         
-        let size = edmFileData.edmFileHeader!.flightInfos[idx].sizeBytes - 15
+        let size = edmFileData.edmFileHeader!.flightInfos[idx].sizeBytes - edmFileData.edmFileHeader!.flightHeaderSize
         let nextflightread = nextread + size
         
         if available < size {
@@ -410,7 +468,7 @@ public struct EdmFileParser {
         
         var efd = EdmFlightData()
         efd.flightHeader = flightheader
-        
+
         guard let date = flightheader.date else {
             trc(level: .error,string:  "parseFlightHeaderAndBody(\(id)): no date in header")
             self.invalid = true
@@ -428,7 +486,9 @@ public struct EdmFileParser {
         currentRec.hasoil = features.contains(.oil)
         var repeatcount = 0
         var reccount = 0
-        while nextread + 3 <= nextflightread {
+        let inc : Int = edmFileData.edmFileHeader!.decodeMaskSingleByte ? 3 : 5
+        while nextread + inc <= nextflightread {
+            trc(level: .info, string: "parseFlightHeaderAndBody: read position before record \(nextread) (nextflightread=\(nextflightread))")
             guard let rec = parseFlightDataRecord(rec: currentRec) else {
                 trc(level: .error, string: "parseFlightDataAndBody(\(id),\(repeatcount)): parsing flight record failed")
                 self.invalid = true
@@ -490,15 +550,27 @@ public struct EdmFileParser {
             return nil
         }
 
-        
-        nextread = fh.flightInfos[idx].offset
+        nextread = fh.flightInfos[idx].offset - 1
+
+        if !peek(for: id) {
+            trc(level: .info, string: "Id \(id) not found at nextread \(nextread), advance by one")
+            nextread += 1
+        }
         
         return parseFlightHeader()
     }
     
+    func peek(for id : Int) -> Bool {
+        let lid = Int(data[nextread]) << 8 + Int(data[nextread+1])
+        if lid == id {
+            return true
+        }
+        return false
+    }
+    
     mutating func parseFlightHeader ( ) -> EdmFlightHeader? {
         
-        guard available > 15 else {
+        guard available > edmFileData.edmFileHeader!.flightHeaderSize else {
             return nil
         }
         
@@ -507,12 +579,20 @@ public struct EdmFileParser {
         for _ in 0...6 {
             a.append(readUShort())
         }
-        
+        if let h = edmFileData.edmFileHeader {
+            if h.hasProtocolHeader {
+                a.append(readUShort())
+                a.append(readUShort())
+                if (edmFileData.edmFileHeader!.config.buildNumber ?? 0) > 108 {
+                    a.append(readUShort())
+                }
+            }
+        }
         let cs = self.data[nextread]
         nextread += 1
-        
+
         var flightheader = EdmFlightHeader(values: a, checksum: cs)
-        
+
         //inherit alarmLimits, Fuel Flow and registration from file header
         flightheader?.alarmLimits = edmFileData.edmFileHeader?.alarms ?? EdmAlarmLimits()
         flightheader?.registration = edmFileData.edmFileHeader?.registration ?? ""
@@ -541,21 +621,25 @@ public struct EdmFileParser {
                     edmFileHeader.config = EdmConfig(hl.contents)
                 case .lineTypeFlight:
                     edmFileHeader.flightInfos.append(EdmFlightInfo(hl.contents))
+                case .lineTypeProto:
+                    edmFileHeader.protocolHeader = Int(hl.contents[0]) ?? 0
+                case .lineTypeCrb, .lineTypeFvl:
+                    break
                 case .lineTypeLastLine:
                     break
-            case .lineTypeInvalid:
+                case .lineTypeInvalid:
                     return nil
             }
         }
         
         edmFileHeader.headerLen = nextread
         edmFileHeader.totalLen = edmFileHeader.headerLen
-        
         for (index, flight) in edmFileHeader.flightInfos.enumerated() {
             edmFileHeader.flightInfos[index].offset = edmFileHeader.totalLen
             edmFileHeader.totalLen += flight.sizeBytes
         }
-
+        self.proto = edmFileHeader.protocolVersion
+        trc(level: .info, string: edmFileHeader.stringValue(includeFlights: true) + "Protocol Version: \(proto)")
         return edmFileHeader
     }
 }
@@ -572,6 +656,9 @@ struct EdmHeaderLine {
         case lineTypeTimestamp
         case lineTypeConfig
         case lineTypeFlight
+        case lineTypeFvl
+        case lineTypeProto
+        case lineTypeCrb
         case lineTypeLastLine
     }
     
