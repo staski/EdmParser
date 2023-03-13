@@ -638,7 +638,28 @@ public struct EdmFileParser {
             edmFileHeader.flightInfos[index].offset = edmFileHeader.totalLen
             edmFileHeader.totalLen += flight.sizeBytes
         }
+        
         self.proto = edmFileHeader.protocolVersion
+        
+        // all other units correct by default
+        switch  edmFileHeader.ff.getUnit() {
+        case .GPH:
+            edmFileHeader.units.flow_unit = .gph
+            edmFileHeader.units.volume_unit = .gallons
+        case .KPH:
+            edmFileHeader.units.flow_unit = .kgph
+            edmFileHeader.units.volume_unit = .kg
+        case .PPH:
+            edmFileHeader.units.flow_unit = .lbsph
+            edmFileHeader.units.volume_unit = .lbs
+        case .LPH:
+            edmFileHeader.units.flow_unit = .lph
+            edmFileHeader.units.volume_unit = .liters
+        }
+        
+        if edmFileHeader.config.temperatureUnit == .celsius {
+            edmFileHeader.units.temp_unit = .celsius
+        }
         trc(level: .info, string: edmFileHeader.stringValue(includeFlights: true) + "Protocol Version: \(proto)")
         return edmFileHeader
     }

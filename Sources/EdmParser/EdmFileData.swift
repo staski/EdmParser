@@ -17,7 +17,7 @@ public enum EdmParamDimensionEnum {
     case FREQ // frequency (rpm)
 }
 
-public enum EdmParamUnitEnum {
+public enum EdmParamUnitEnum : Encodable {
     case liters
     case gallons
     case lbs
@@ -100,7 +100,7 @@ public enum EdmParamUnitEnum {
     }
 }
 
-public struct EdmUnits {
+public struct EdmUnits : Encodable {
     public var volume_unit : EdmParamUnitEnum = .liters
     public var temp_unit : EdmParamUnitEnum = .fahrenheit
     public var flow_unit : EdmParamUnitEnum = .lph
@@ -114,6 +114,18 @@ public struct EdmUnits {
         press_unit = .inhg
         volt_unit = .volt
         freq_unit = .rpm
+    }
+    
+    public func stringValue() -> String {
+        var str = "Units: "
+        
+        str.append(volume_unit.name + ", ")
+        str.append(temp_unit.name + ", ")
+        str.append(flow_unit.name + ", ")
+        str.append(press_unit.name + ", ")
+        str.append(volt_unit.name + ", ")
+        str.append(freq_unit.name)
+        return str
     }
 }
 
@@ -552,6 +564,7 @@ public struct EdmFileHeader : Encodable {
     var protocolHeader : Int? = nil
     var headerLen = 0
     public var totalLen = 0
+    public var units = EdmUnits()
     
     public var hasProtocolHeader : Bool {
         get {

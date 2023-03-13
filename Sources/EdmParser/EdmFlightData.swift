@@ -598,12 +598,24 @@ public struct EdmFlightData : Encodable {
         }
         
         let fr = flightDataBody.enumerated()
-        return fr.reduce((0,0), { (res, elem ) in
+        return fr.reduce((0,-100), { (res, elem ) in
             let m = Int(elem.1.oat)
             return m > res.1 ? (elem.0,m) : res
         })
     }
     
+    public func getMinOat () -> (Int,Int) {
+        if hasfeature(.oat) == false {
+            return (0,0)
+        }
+        
+        let fr = flightDataBody.enumerated()
+        return fr.reduce((0,100), { (res, elem ) in
+            let m = Int(elem.1.oat)
+            return m < res.1 ? (elem.0,m) : res
+        })
+    }
+
     public func getMaxCld () -> (Int,Int) {
         if hasfeature(.cld) == false {
             return (0,0)
@@ -613,6 +625,18 @@ public struct EdmFlightData : Encodable {
         return fr.reduce((0,0), { (res, elem ) in
             let m = Int(elem.1.cld)
             return m < res.1 ? (elem.0,m) : res //cooling rate records negative values only (?)
+        })
+    }
+
+    public func getMaxFF () -> (Int,Int) {
+        if hasfeature(.ff) == false {
+            return (0,0)
+        }
+        
+        let fr = flightDataBody.enumerated()
+        return fr.reduce((0,0), { (res, elem ) in
+            let m = Int(elem.1.ff)
+            return m > res.1 ? (elem.0,m) : res //cooling rate records negative values only (?)
         })
     }
 
@@ -1030,6 +1054,18 @@ extension EdmFlightData {
             s.append("\nmax Oil: \(maxt) F after " + d.hms())
         }
 
+        if hasfeature(.ff){
+            (idx, maxt) = self.getMaxFF()
+            fr = flightDataBody[idx]
+            guard let t = fr.date else {
+                trc(level: .error, string: "FlightData.stringValue(): no date set")
+                return nil
+            }
+            
+            d = t.timeIntervalSince(fh.date!)
+            s.append("\nmax FF: \(maxt) after " + d.hms())
+        }
+
         if hasfeature(.oat){
             (idx, maxt) = self.getMaxOat()
             fr = flightDataBody[idx]
@@ -1042,6 +1078,18 @@ extension EdmFlightData {
             s.append("\nmax OAT: \(maxt)°F after " + d.hms())
         }
         
+        if hasfeature(.oat){
+            (idx, maxt) = self.getMinOat()
+            fr = flightDataBody[idx]
+            guard let t = fr.date else {
+                trc(level: .error, string: "FlightData.stringValue(): no date set")
+                return nil
+            }
+            
+            d = t.timeIntervalSince(fh.date!)
+            s.append("\nmin OAT: \(maxt)°F after " + d.hms())
+        }
+
         if hasfeature(.cld){
             (idx, maxt) = self.getMaxCld()
             fr = flightDataBody[idx]
