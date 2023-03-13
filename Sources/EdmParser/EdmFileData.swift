@@ -107,6 +107,14 @@ public struct EdmUnits {
     public var press_unit : EdmParamUnitEnum = .inhg
     public var volt_unit : EdmParamUnitEnum = .volt
     public var freq_unit : EdmParamUnitEnum = .rpm
+    public init () {
+        volume_unit = .liters
+        temp_unit = .fahrenheit
+        flow_unit = .lph
+        press_unit = .inhg
+        volt_unit = .volt
+        freq_unit = .rpm
+    }
 }
 
 public struct EdmAlarmLimits : Encodable {
