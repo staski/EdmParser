@@ -574,29 +574,36 @@ public struct EdmFileParser {
             return nil
         }
         
+        guard let h = edmFileData.edmFileHeader else {
+            trc(level: .error, string: "parseFlightHeader(): no File header")
+            return nil
+        }
+        
         var a : [UInt16]  = []
         
         for _ in 0...6 {
             a.append(readUShort())
         }
-        if let h = edmFileData.edmFileHeader {
-            if h.hasProtocolHeader {
+        
+        if h.hasProtocolHeader {
+            a.append(readUShort())
+            a.append(readUShort())
+            if (h.config.buildNumber ?? 0) > 108 {
                 a.append(readUShort())
-                a.append(readUShort())
-                if (edmFileData.edmFileHeader!.config.buildNumber ?? 0) > 108 {
-                    a.append(readUShort())
-                }
             }
         }
+        
+        
         let cs = self.data[nextread]
         nextread += 1
 
         var flightheader = EdmFlightHeader(values: a, checksum: cs)
 
         //inherit alarmLimits, Fuel Flow and registration from file header
-        flightheader?.alarmLimits = edmFileData.edmFileHeader?.alarms ?? EdmAlarmLimits()
-        flightheader?.registration = edmFileData.edmFileHeader?.registration ?? ""
-        flightheader?.ff = edmFileData.edmFileHeader?.ff ?? EdmFuelFlow()
+        flightheader?.alarmLimits = h.alarms
+        flightheader?.registration = h.registration
+        flightheader?.ff = h.ff
+        flightheader?.units = h.units
         
         trc(level: .all, string: "inherited ff")
         return flightheader
@@ -640,7 +647,6 @@ public struct EdmFileParser {
         }
         
         self.proto = edmFileHeader.protocolVersion
-        
         // all other units correct by default
         switch  edmFileHeader.ff.getUnit() {
         case .GPH:
@@ -660,6 +666,11 @@ public struct EdmFileParser {
         if edmFileHeader.config.temperatureUnit == .celsius {
             edmFileHeader.units.temp_unit = .celsius
         }
+        
+        if edmFileHeader.config.unknown & 0xF0 == 0 {
+            edmFileHeader.units.oat_unit = .fahrenheit
+        }
+        
         trc(level: .info, string: edmFileHeader.stringValue(includeFlights: true) + "Protocol Version: \(proto)")
         return edmFileHeader
     }

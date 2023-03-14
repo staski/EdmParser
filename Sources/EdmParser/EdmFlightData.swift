@@ -999,6 +999,7 @@ extension EdmFlightData {
             return nil
         }
         var s = fh.stringValue()
+        let u = fh.units
 
         if hasfeature(.ff){
             let ff_unit = fh.ff.getUnit()
@@ -1030,7 +1031,7 @@ extension EdmFlightData {
         }
         
         d = t.timeIntervalSince(fh.date!)
-        s.append("max CHT: \(maxt)°F after " + d.hms())
+        s.append("max CHT: \(maxt.unitString(for: u.temp_unit)) after " + d.hms())
         
         (idx, maxt) = self.getMaxDiff()
         fr = flightDataBody[idx]
@@ -1040,7 +1041,7 @@ extension EdmFlightData {
         }
         
         d = t.timeIntervalSince(fh.date!)
-        s.append("\nmax DIFF: \(maxt)°F after " + d.hms())
+        s.append("\nmax DIFF: \(maxt.unitString(for: u.temp_unit)) after " + d.hms())
         
         if hasfeature(.oil){
             (idx, maxt) = self.getMaxOil()
@@ -1051,7 +1052,7 @@ extension EdmFlightData {
             }
             
             d = t.timeIntervalSince(fh.date!)
-            s.append("\nmax Oil: \(maxt) F after " + d.hms())
+            s.append("\nmax Oil: \(maxt.unitString(for: u.temp_unit)) after " + d.hms())
         }
 
         if hasfeature(.ff){
@@ -1063,7 +1064,7 @@ extension EdmFlightData {
             }
             
             d = t.timeIntervalSince(fh.date!)
-            s.append("\nmax FF: \(maxt) after " + d.hms())
+            s.append("\nmax FF: \(maxt.unitString(for: u.flow_unit)) after " + d.hms())
         }
 
         if hasfeature(.oat){
@@ -1075,7 +1076,7 @@ extension EdmFlightData {
             }
             
             d = t.timeIntervalSince(fh.date!)
-            s.append("\nmax OAT: \(maxt)°F after " + d.hms())
+            s.append("\nmax OAT: \(maxt.unitString(for: u.oat_unit)) after " + d.hms())
         }
         
         if hasfeature(.oat){
@@ -1087,7 +1088,7 @@ extension EdmFlightData {
             }
             
             d = t.timeIntervalSince(fh.date!)
-            s.append("\nmin OAT: \(maxt)°F after " + d.hms())
+            s.append("\nmin OAT: \(maxt.unitString(for: u.oat_unit)) after " + d.hms())
         }
 
         if hasfeature(.cld){
@@ -1099,7 +1100,7 @@ extension EdmFlightData {
             }
             
             d = t.timeIntervalSince(fh.date!)
-            s.append("\nmax CLD: \(maxt)°F/min after " + d.hms())
+            s.append("\nmax CLD: \(maxt.unitString(for: u.temp_unit))/min after " + d.hms())
         }
 
         if hasfeature(.map){
@@ -1110,9 +1111,9 @@ extension EdmFlightData {
                 return nil
             }
             
-            maxt = maxt/10
+            //maxt = maxt/10
             d = t.timeIntervalSince(fh.date!)
-            s.append("\nmax MAP: \(maxt) inches after " + d.hms())
+            s.append("\nmax MAP: \(maxt.unitString(for: u.press_unit)) inches after " + d.hms())
         }
 
         if hasfeature(.rpm){
@@ -1124,12 +1125,29 @@ extension EdmFlightData {
             }
             
             d = t.timeIntervalSince(fh.date!)
-            s.append("\nmax RPM: \(maxt) rpm after " + d.hms())
+            s.append("\nmax RPM: \(maxt.unitString(for: u.freq_unit)) after " + d.hms())
         }
 
         return s
     }
 }
+
+
+extension Double {
+    public func unitString(for unit: EdmParamUnitEnum) -> String {
+        return String(self).appending(unit.shortname)
+    }
+}
+
+extension Int {
+    public func unitString(for unit: EdmParamUnitEnum) -> String {
+        if unit.scale == 1 {
+            return String(self).appending(unit.shortname)
+        }
+        return String(Double(self)/Double(unit.scale)).appending(unit.shortname)
+    }
+}
+
 
 extension TimeInterval {
     public func hms () -> String {

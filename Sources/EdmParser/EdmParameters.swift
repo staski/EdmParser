@@ -9,7 +9,8 @@ import Foundation
 
 public enum EdmParamDimensionEnum {
     case VOLUME // volume (liters)
-    case TEMP // temperature (°C)
+    case TEMP // engine temperature (°C)
+    case OAT // outside temperatures
     case FLOW // flow (gallons / h)
     case PRESS // pressure (inHg)
     case VOLT // voltage (volts)
@@ -35,7 +36,7 @@ public enum EdmParamUnitEnum : Encodable {
         get {
             switch self {
             case .liters:
-                return "l"
+                return "ltr"
             case .gallons:
                 return "G"
             case .lbs:
@@ -47,19 +48,19 @@ public enum EdmParamUnitEnum : Encodable {
             case .fahrenheit:
                 return "°F"
             case .lph:
-                return "l/h"
+                return " lph"
             case .gph:
-                return "g/h"
+                return " gph"
             case .lbsph:
-                return "lbs/h"
+                return " lbs/h"
             case .kgph:
-                return "kg/h"
+                return " kg/h"
             case .inhg:
                 return "\"Hg"
             case .volt:
-                return "V"
+                return " V"
             case .rpm:
-                return "RPM"
+                return " rpm"
             }
         }
     }
@@ -106,9 +107,11 @@ public struct EdmUnits : Encodable {
     public var press_unit : EdmParamUnitEnum = .inhg
     public var volt_unit : EdmParamUnitEnum = .volt
     public var freq_unit : EdmParamUnitEnum = .rpm
+    public var oat_unit : EdmParamUnitEnum = .celsius
     public init () {
         volume_unit = .liters
         temp_unit = .fahrenheit
+        oat_unit = .celsius
         flow_unit = .lph
         press_unit = .inhg
         volt_unit = .volt
@@ -120,6 +123,7 @@ public struct EdmUnits : Encodable {
         
         str.append(volume_unit.name + ", ")
         str.append(temp_unit.name + ", ")
+        str.append(oat_unit.name + ", ")
         str.append(flow_unit.name + ", ")
         str.append(press_unit.name + ", ")
         str.append(volt_unit.name + ", ")
@@ -127,7 +131,6 @@ public struct EdmUnits : Encodable {
         return str
     }
 }
-
 
 public enum EdmFlightPeakValue : CaseIterable {
     case CHT
@@ -251,6 +254,8 @@ public enum EdmFlightPeakValue : CaseIterable {
         switch self.dimension {
         case .TEMP:
             return flight.units.temp_unit
+        case .OAT:
+            return flight.units.oat_unit
         case .FREQ:
             return flight.units.freq_unit
         case .FLOW:
@@ -727,7 +732,8 @@ public struct EdmConfig : Encodable {
         version = Int(values[c-1]) ?? -1
         features = EdmFeatures(high: flagsHi, low: flagsLow)
         
-        trc(level: .info, string: "EdmConfig(): model - \(modelNumber) version - \(version), build - \(String(describing: buildNumber)) beta - \(String(describing: betaNumber)), features: \(features.stringValue()), (count=\(values.count))")
+        let oatstr = String(unknown, radix: 16)
+        trc(level: .info, string: "EdmConfig(): model=\(modelNumber), version=\(version), build=\(String(describing: buildNumber)), beta=\(String(describing: betaNumber)), features: \(features.stringValue()), OAT-units=\(oatstr) (count=\(values.count))")
     }
     
     public func numOfEngines () -> Int {

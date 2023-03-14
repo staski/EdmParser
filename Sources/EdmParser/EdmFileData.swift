@@ -164,10 +164,13 @@ public struct EdmFlightHeader : Encodable {
     var unknown : UInt16 = 0
     var interval_secs : UInt16 = 0
     public var date : Date?
-    public var alarmLimits = EdmAlarmLimits()
-    public var ff = EdmFuelFlow()
     
+    // inherited by FileHeader -> filled after parsing
+    public var ff = EdmFuelFlow()
+    public var alarmLimits = EdmAlarmLimits()
+    public var units = EdmUnits()
     public var registration = ""
+    
     var checksum : UInt8 = 0
     
     public func hasfeature(_ feature: EdmFeatures) -> Bool {
@@ -216,6 +219,7 @@ public struct EdmFlightHeader : Encodable {
         var cs = a.map { $0.bytesumval() }.reduce(0,+) & 0xff
         cs = (256 - cs) & 0xff
         
+        trc(level: .info, string: "EdmFlightHeader(\(id)): unknown is " + String(unknown,radix: 16))
         trc(level: .info, string: "EdmFlightHeader(\(id)): checksum is \(cs)")
         
         if cs != checksum {
