@@ -304,6 +304,14 @@ public enum EdmFlightPeakValue : CaseIterable {
             return edmFlightData.getMaxCld
         case .MAP:
             return edmFlightData.getMaxMap
+        case .FF:
+            return edmFlightData.getMaxFF
+        case .OATHI:
+            return edmFlightData.getMaxOat
+        case .OATLO:
+            return edmFlightData.getMinOat
+        case .RPM:
+            return edmFlightData.getMaxRpm
         default:
             return nil
         }
