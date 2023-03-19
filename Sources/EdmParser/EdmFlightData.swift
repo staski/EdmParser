@@ -133,7 +133,7 @@ struct BitArray {
 
 typealias EdmNAFlags = BitArray48
 
-enum EdmSensorBits : Int, CaseIterable {
+public enum EdmSensorBits : Int, CaseIterable {
     case egt0 = 0,
     egt1,
     egt2,
@@ -670,6 +670,33 @@ public struct EdmFlightData : Encodable {
     }
 }
 
+public typealias EdmNAIntervals = [String: [Int]]
+
+// getNAIntervals returns for each non available sensor values a list of intervals of non availability
+// the interval is encoded as an array of (start, stop)-indices
+extension EdmFlightData {
+    public func getNAIntervals() -> EdmNAIntervals {
+        var dict : EdmNAIntervals = [:]
+        if hasnaflag == false {
+            return dict
+        }
+        for i in 0..<flightDataBody.count {
+            if flightDataBody[i].naflags.rawValue == 0 { continue }
+            let naflagarray = flightDataBody[i].naflags.arrayValue
+            for v in naflagarray {
+                if dict[v] == nil {
+                    dict[v] = [i,i]
+                } else if dict[v]!.last! + 1 == i {
+                    dict[v]!.removeLast()
+                    dict[v]!.append(i)
+                } else {
+                    dict[v]!.append(contentsOf: [i,i])
+                }
+            }
+        }
+        return dict
+    }
+}
 // calculate number of warnings and warning durations
 extension EdmFlightData {
     
