@@ -236,8 +236,10 @@ public enum EdmFlightPeakValue : CaseIterable {
     public var dimension : EdmParamDimensionEnum {
         get {
             switch self {
-            case .CHT, .EGT, .CLD, .DIFF, .OILLOW, .OILHI, .OATLO, .OATHI, .IAT:
+            case .CHT, .EGT, .CLD, .DIFF, .OILLOW, .OILHI, .IAT:
                 return .TEMP
+            case .OATLO, .OATHI:
+                return .OAT
             case .FF:
                 return .FLOW
             case .BATLOW, .BATHI:
