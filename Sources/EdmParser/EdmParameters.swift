@@ -130,6 +130,28 @@ public struct EdmUnits : Encodable {
         str.append(freq_unit.name)
         return str
     }
+    
+    enum CodingKeys : CodingKey {
+        case volume
+        case engine_temperature
+        case fuelflow
+        case pressure
+        case voltage
+        case frequency
+        case oat
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(volume_unit.name, forKey: .volume)
+        try container.encode(temp_unit.name, forKey: .engine_temperature)
+        try container.encode(flow_unit.name, forKey: .fuelflow)
+        try container.encode(press_unit.name, forKey: .pressure)
+        try container.encode(volt_unit.name, forKey: .voltage)
+        try container.encode(freq_unit.name, forKey: .frequency)
+        try container.encode(oat_unit.name, forKey: .oat)
+    }
+
 }
 
 public enum EdmFlightPeakValue : CaseIterable {
