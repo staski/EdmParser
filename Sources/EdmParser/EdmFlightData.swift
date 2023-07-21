@@ -252,7 +252,8 @@ enum rpmhi_or_rcdt : Codable {
 
 public struct EdmFlightDataRecord : Codable {
     public var date : Date?
-    var egt : [Int16] =  Array(repeating: 0x00f0, count: 6) //[0x00f0, 0x00f0]
+    var egt : [Int16]
+    var numOfCyl : Int = 6
     var t1 : Int16 = 0x00f0
     var t2 : Int16 = 0x00f0
     
@@ -297,6 +298,14 @@ public struct EdmFlightDataRecord : Codable {
     var hasff = false
     var hascld = false
     var hasoil = false
+    
+    public init(numofCyl n: Int) {
+        numOfCyl = n
+        egt =  Array(repeating: 0x00f0, count: numOfCyl) //[0x00f0, 0x00f0]
+        cht =  Array(repeating: 0x00f0, count: numOfCyl) //[0x00f0, 0x00f0]
+        regt =  Array(repeating: 0x00f0, count: numOfCyl) //[0x00f0, 0x00f0]
+        rcht =  Array(repeating: 0x00f0, count: numOfCyl) //[0x00f0, 0x00f0]
+    }
     
     func info () -> String {
         return "Edm Flight-Data Body"
@@ -406,13 +415,13 @@ public struct EdmFlightDataRecord : Codable {
     }
     
     mutating func add (rawValue : EdmRawDataRecord) {
-        for i in (0...5) {
+        for i in (0...numOfCyl - 1) {
             egt[i] += Int16(rawValue.values[i])
         }
         t1 += Int16(rawValue.values[6])
         t2 += Int16(rawValue.values[7])
         
-        for i in (0...5) {
+        for i in (0...numOfCyl - 1) {
             cht[i] += Int16(rawValue.values[8+i])
         }
         
@@ -429,7 +438,7 @@ public struct EdmFlightDataRecord : Codable {
         ff  += Int16(rawValue.values[23])
         
 
-        for i in (0...5) {
+        for i in (0...numOfCyl - 1) {
             regt[i] += Int16(rawValue.values[24+i])
         }
         
@@ -440,7 +449,7 @@ public struct EdmFlightDataRecord : Codable {
                               
         rt2 += Int16(rawValue.values[31])
 
-        for i in (0...5) {
+        for i in (0...numOfCyl - 1) {
             rcht[i] += Int16(rawValue.values[32+i])
         }
 

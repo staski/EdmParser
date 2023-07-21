@@ -417,6 +417,7 @@ public struct EdmFileParser {
         }
 
         guard let idx = edmFileData.edmFileHeader!.idx(for: id) else {
+            trc(level: .error, string: "parseFlightHeaderAndSkip: no idx found for id \(id)")
             return nil
         }
         
@@ -427,7 +428,6 @@ public struct EdmFileParser {
     }
     
     public mutating func parseFlightHeaderAndBody (for id: Int) {
-        var currentRec = EdmFlightDataRecord()
 
         trc(level: .info, string: "parseFlightHeaderAndBody: read position before header \(nextread)")
         guard let flightheader = parseFlightHeader(for: id) else {
@@ -437,13 +437,13 @@ public struct EdmFileParser {
         
         let flightId = flightheader.id
         let flags = flightheader.flags
-        
+
         if (flightId != id) {
             trc(level: .error, string: "parseFlightHeaderAndBody(\(id)): flight Ids dont match. Wanted \(id), found \(flightId)")
-            self.invalid = true
+            //self.invalid = true
             return
         }
-
+        
         let features = self.edmFileData.edmFileHeader!.config.features
         if (flags.rawValue != features.rawValue){
             trc(level: .warn, string: "parseFlightHeaderAndBody(\(id)): flags dont match. flight " + flags.stringValue() + ", file " + features.stringValue())
@@ -474,7 +474,9 @@ public struct EdmFileParser {
             self.invalid = true
             return
         }
-        
+
+        var currentRec = EdmFlightDataRecord(numofCyl: edmFileData.edmFileHeader?.config.features.numCylinders() ?? 6)
+
         currentRec.date = date
         var interval_secs = TimeInterval(flightheader.interval_secs)
         currentRec.hasoat = features.contains(.oat)
