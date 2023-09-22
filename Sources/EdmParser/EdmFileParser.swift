@@ -140,7 +140,7 @@ public struct EdmFileParser {
                 return newItem
             }
 
-            if (c.isLetter || c.isNumber){
+            if (c.isLetter || c.isNumber || c == Character("-") || c == Character("_")){
                 if skip {
                     continue
                 }
@@ -300,13 +300,9 @@ public struct EdmFileParser {
         
         let count = nextread - recstart
         trc(level: .info, string: "parseFlightDataRecord: parsed \(count+1) Bytes")
+       
         // do the checksum stuff
-        var cs : UInt8 = 0
-        for i in recstart ..< nextread {
-            cs = cs &+ data[i]
-        }
-        
-        cs = 0 &- cs
+        let cs = calcChecksum(from: recstart, to: nextread)
         let storedcs = readByte()
         if cs != storedcs {
             trc(level: .error, string: String(format: "ParseFlightDataRecord: checksum failed (expected 0x%X , found 0x%X)", storedcs, cs))
@@ -315,6 +311,23 @@ public struct EdmFileParser {
         return rec
     }
     
+    func calcChecksum(from start: Int, to end: Int) -> UInt8 {
+        let version = edmFileData.edmFileHeader?.config.version ?? 300 // use new checksum as default
+        var cs : UInt8 = 0
+        
+        if version >= 300 {
+            for i in start ..< end {
+                cs = cs &+ data[i]
+            }
+            cs = 0 &- cs
+        }
+        else {
+            for i in start ..< end {
+                cs = cs ^ data[i]
+            }
+        }
+        return cs
+    }
     
     mutating func parseFlightDecodeFlags() -> EdmDecodeFlags? {
         guard available > 1 else {
@@ -582,7 +595,7 @@ public struct EdmFileParser {
         }
         
         var a : [UInt16]  = []
-        
+        let start = nextread
         for _ in 0...6 {
             a.append(readUShort())
         }
@@ -596,11 +609,17 @@ public struct EdmFileParser {
         }
         
         
-        let cs = self.data[nextread]
+        var flightheader = EdmFlightHeader(values: a)
+
+        let cs = calcChecksum(from: start, to: nextread)
+        let checksum = self.data[nextread]
         nextread += 1
-
-        var flightheader = EdmFlightHeader(values: a, checksum: cs)
-
+        
+        if cs != checksum {
+            print(String(format: "EdmFlightHeader (id %d): failed for checksum (required 0x%X , data 0x%X)", flightheader?.id ?? 0, checksum, cs))
+            return nil
+        }
+        flightheader?.checksum = cs
         //inherit alarmLimits, Fuel Flow and registration from file header
         flightheader?.alarmLimits = h.alarms
         flightheader?.registration = h.registration
@@ -620,6 +639,7 @@ public struct EdmFileParser {
             switch hl.lineType {
                 case .lineTypeRegistration:
                     edmFileHeader.registration = edmFileHeader.initRegistration(hl.contents) ?? ""
+                    edmFileHeader.registration.trimEnd()
                 case .lineTypeAlert:
                     edmFileHeader.alarms = EdmAlarmLimits(hl.contents)
                 case .lineTypeFuelFlow:

@@ -158,6 +158,14 @@ extension UInt16 {
     }
 }
 
+extension String {
+    mutating func trimEnd () {
+        while self.hasSuffix("-") || self.hasSuffix("_") {
+            self.removeLast()
+        }
+    }
+}
+
 public struct EdmFlightHeader : Encodable {
     public var id : UInt16 = 0
     var flags = EdmFeatures()
@@ -187,7 +195,7 @@ public struct EdmFlightHeader : Encodable {
         return str
     }
     
-    init? (values a : [UInt16], checksum : UInt8){
+    init? (values a : [UInt16]){
         
         if a.count < 7 {
             return nil
@@ -215,18 +223,8 @@ public struct EdmFlightHeader : Encodable {
         let dc = DateComponents(year: year, month: month, day: day, hour: hour, minute: minutes, second: seconds)
         let c = Calendar(identifier: Calendar.Identifier.gregorian)
         date = c.date(from: dc)
-        
-        var cs = a.map { $0.bytesumval() }.reduce(0,+) & 0xff
-        cs = (256 - cs) & 0xff
-        
+    
         trc(level: .info, string: "EdmFlightHeader(\(id)): unknown is " + String(unknown,radix: 16))
-        trc(level: .info, string: "EdmFlightHeader(\(id)): checksum is \(cs)")
-        
-        if cs != checksum {
-            print(String(format: "EdmFlightHeader (id %d): failed for checksum (required 0x%X , data 0x%X)", id, checksum, cs))
-            return nil
-        }
-        self.checksum = checksum
     }
 }
 
